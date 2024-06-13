@@ -1,0 +1,119 @@
+==============================================================================
+
+" Vim documentation file
+" Language: English
+" Maintainer: Ricardo Ramirez https://github.com/RicardoRamirezR/
+
+*blade-nav*                       Navigating Blade views within Laravel projects
+
+blade-nav.nvim is a Neovim plugin that enhances navigation within Laravel
+projects by allowing quick access to Blade files and their corresponding
+classes. This plugin simplifies moving between controllers, routes, Blade
+views, and components in Laravel applications.
+
+==============================================================================
+CONTENTS                                                    *blade-nav-contents*
+
+1. Introduction                                      |blade-nav-introduction|
+2. Navigation                                        |blade-nav-navigation|
+3. Features                                          |blade-nav-features|
+4. Usage                                             |blade-nav-usage|
+5. Configuration                                     |blade-nav-configuration|
+6. Example                                           |blade-nav-example|
+7. Contributing                                      |blade-nav-contributing|
+8. License                                           |blade-nav-license|
+9. Acknowledgments                                   |blade-nav-acknowledgments|
+
+==============================================================================
+1. Introduction                                         *blade-nav-introduction*
+
+blade-nav.nvim enhances navigation within Laravel projects by facilitating
+access to Blade files and corresponding classes directly from Neovim.
+
+==============================================================================
+2. Navigation                                             *blade-nav-navigation*
+
+From Blade Files                                         *blade-nav-blade-files*
+
+- Navigate to the parent view using `@extends('name')`.
+- Navigate to included views using `@include('name')`.
+- Open Laravel components using `<x-name />`.
+- Open Livewire components using `<livewire:name />` or `@livewire('name')`.
+
+From Controllers and Routes                              *blade-nav-controllers*
+
+- Open Blade views from controller or route definitions like:
+  - `Route::view('url', 'name')`
+  - `View::make('name')`
+  - `view('name')`
+
+==============================================================================
+3. Features                                                 *blade-nav-features*
+
+blade-nav.nvim offers the following features:
+
+- Utilizes the `gf` (goto file) command for navigation.
+- Provides a custom source for nvim-cmp for component selection.
+
+==============================================================================
+4. Usage                                                       *blade-nav-usage*
+
+4.1 To navigate to a Blade file or its corresponding class**:
+
+  - Place the cursor over the file name and use the `gf` command.
+    - If the component view exists but no corresponding class, it opens the
+      view file.
+    - If the class exists but not its view, the class is opened.
+    - If neither exists, it presents three options: open the view, open the
+      class, or run an artisan command to create the component.
+
+4.2 To navigate using the custom source** with nvim-cmp (Requires nvim-cmp
+to be installed and configured), write either:
+
+  - `@extends`
+  - `@include`
+  - `<x-`
+  - `<livewire`
+  - `@livewire`
+
+And the list of files will appear, and with the magic of cmp the list is filtered
+while you write.
+
+==============================================================================
+5. Configuration                                       *blade-nav-configuration*
+
+No additional configuration is required. The plugin works out-of-the-box with
+the default `gf` command.
+
+==============================================================================
+6. Example                                                    *blade-nav-example*
+
+To navigate from a controller to a Blade view:
+<
+public function show()
+{
+    return view('welcome');
+}
+>
+
+==============================================================================
+7. Contributing                                         *blade-nav-contributing*
+
+Feel free to submit issues or pull requests to enhance the functionality of
+this plugin.
+
+==============================================================================
+8. License                                                   *blade-nav-license*
+
+This plugin is open-source and distributed under the MIT License. See the
+LICENSE file for more details.
+
+==============================================================================
+9. Acknowledgments                                   *blade-nav-acknowledgments*
+
+Special thanks to the Neovim and Laravel communities for their continuous
+support and contributions.
+
+==============================================================================
+
+vim:tw=78:ts=2:et:ft=help:norl:

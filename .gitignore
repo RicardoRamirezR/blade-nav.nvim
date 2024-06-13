@@ -1,3 +1,11 @@
+# Lua
+/luarocks
+/lua_modules
+/.luarocks
+
+# OS
+.DS_Store
+
 # Compiled Lua sources
 luac.out
 

@@ -21,10 +21,10 @@ Navigating Blade views within Laravel projects
 
 ### From Blade Files
 
-- Navigate to the parent view using `@extends('name')`.
-- Navigate to included views using `@include('name')`.
-- Open Laravel components using `<x-name />`.
-- Open Livewire components using `<livewire:name />` or `@livewire('name')`.
+- Navigate to the parent view using `@extends('name')`
+- Navigate to included views using `@include('name')`
+- Open Laravel components using `<x-name />`
+- Open Livewire components using `<livewire:name />` or `@livewire('name')`
 
 ### From Controllers and Routes:
 
@@ -71,9 +71,9 @@ use {
     - If neither exists, it presents three options: open the view, open the class, or run an artisan command to create the component.
 2. **To navigate using the custom source** with nvim-cmp (Requires nvim-cmp to be installed and configured), write either:
 
-- `@extends`.
-- `@include`.
-- `<x-`.
+- `@extends`
+- `@include`
+- `<x-`
 - `<livewire`
 - `@livewire`
 
@@ -106,5 +106,3 @@ This plugin is open-source and distributed under the MIT License. See the LICENS
 ## Acknowledgments
 
 Special thanks to the Neovim and Laravel communities for their continuous support and contributions.
-
-
