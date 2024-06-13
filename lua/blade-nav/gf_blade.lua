@@ -215,6 +215,11 @@ function M.gf()
     return true
   end
 
+  if #choices == 0 and file_path and not class_path then
+    vim.cmd("edit " .. file_path)
+    return true
+  end
+
   if #choices == 0 then
     local component = capitalize(remove_prefix(component_name, prefix))
     table.insert(choices, "1. " .. file_path)
