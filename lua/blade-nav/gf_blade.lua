@@ -105,34 +105,34 @@ end
 local function get_component_type_and_name()
   local _, col = unpack(vim.api.nvim_win_get_cursor(0))
   local line = vim.api.nvim_get_current_line()
-  local start_word = nil
 
+  -- Adjust column to be 1-based and within line length
   col = math.min(col + 1, #line)
 
-  local word_start = line:sub(1, col):match("()[%w-]+[^%w-]*$")
-  if word_start then
-    start_word = word_start
-  end
-
-  if not start_word then
-    print("No word found")
+  -- Match the component pattern from the start of the line to the cursor position
+  local start_tag = line:sub(1, col):match("[<@]")
+  if not start_tag then
     return
   end
 
-  local start_select = line:sub(1, start_word - 1):match(".*()[<@]")
-
-  if not start_select then
+  -- Match the component pattern from the cursor position to the end of the line
+  local end_tag = line:sub(col):match("[>)]")
+  if not end_tag then
+    print("No end tag found")
     return
   end
 
-  local end_select = line:find("%s", col + 1)
+  -- Concatenate the start and end tag parts
+  local component_name = line:sub(line:find(start_tag), line:find(end_tag))
 
-  if not end_select then
-    end_select = #line + 1
+  -- Clean up the component name by removing any trailing characters like '>' or "'"
+  component_name = component_name:gsub("[<@/> ]", "")
+
+  if component_name then
+    return component_name
+  else
+    print("No component name found")
   end
-
-  local selected_text = line:sub(start_select + 1, end_select - 1)
-  return selected_text
 end
 
 local function laravel_component(component_name)
@@ -198,11 +198,17 @@ function M.gf()
 
   local file_path, class_path = unpack(get_paths(component_name))
   local choices = {}
-
   local file_that_exists
+
   if vim.fn.filereadable(file_path) == 1 then
     table.insert(choices, "1. " .. file_path)
     file_that_exists = file_path
+  else
+    local dir_path = file_path:gsub("%.blade%.php$", "")
+    if vim.fn.isdirectory(dir_path) ~= 0 then
+      vim.cmd("edit " .. dir_path .. "/index.blade.php")
+      return true
+    end
   end
 
   if vim.fn.filereadable(class_path) == 1 then
