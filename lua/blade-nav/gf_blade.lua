@@ -32,7 +32,7 @@ local function component_picker_telescope(opts, options)
 
   pickers
       .new(opts, {
-        prompt_title = (#options == 3) and "Create component" or "Select Component File",
+        prompt_title = (#options >= 3) and "Create component" or "Select Component File",
         finder = finders.new_table(options),
         sorter = conf.generic_sorter(opts),
         attach_mappings = function(bufnr, _)
@@ -49,7 +49,7 @@ local function component_picker_telescope(opts, options)
 end
 
 local function component_picker_native(options)
-  local choice_str = (#options == 3) and "Create component:\n" or "Choose a file:\n"
+  local choice_str = (#options >= 3) and "Create component:\n" or "Choose a file:\n"
   for _, option in ipairs(options) do
     choice_str = choice_str .. option .. "\n"
   end
@@ -239,6 +239,9 @@ function M.gf()
       table.insert(choices, "3. php artisan make:livewire " .. component:gsub("['()%)]", ""))
     else
       table.insert(choices, "3. php artisan make:component " .. component)
+    end
+    if prefix == "x-" and component_name:find("%.") == nil then
+      table.insert(choices, "4. " .. file_path:gsub("%.blade%.php$", "/index.blade.php"))
     end
   end
 
