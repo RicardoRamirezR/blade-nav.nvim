@@ -65,10 +65,18 @@ use {
 
 1. **To navigate to a Blade file or its corresponding class**:
 
-  - Place the cursor over the file name and use the gf command.
-    - If the component view exists but no corresponding class, it opens the view file.
+  - Place the cursor over the file name and use the `gf` command.
+    - If the component view exists but there is no corresponding class, it 
+    opens the view file.
     - If the class exists but not its view, the class is opened.
-    - If neither exists, it presents three options: open the view, open the class, or run an artisan command to create the component.
+    - If neither exists, it presents three options: open the view, open the 
+    class, or run an Artisan command to create the component.
+    - If it is an `<x-` component like `<x-form>` and it does not exist, a
+    fourth option will be presented to create an Anonymous Index Component at 
+    `resources/views/components/form/index.blade.php`. After selecting this
+    option, a new buffer is opened, and you should create the form directory,
+    it can be done using the write command `:write ++p`.
+
 2. **To navigate using the custom source** with nvim-cmp (Requires nvim-cmp to be installed and configured), write either:
 
 - `@extends`
