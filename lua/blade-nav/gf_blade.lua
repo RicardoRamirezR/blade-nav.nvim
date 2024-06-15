@@ -116,7 +116,7 @@ local function get_component_type_and_name()
   end
 
   -- Match the component pattern from the cursor position to the end of the line
-  local end_tag = line:sub(col):match("[>)]")
+  local end_tag = line:sub(col):match("[ >)]")
   if not end_tag then
     print("No end tag found")
     return
@@ -126,6 +126,11 @@ local function get_component_type_and_name()
   local component_name = line:sub(line:find(start_tag), line:find(end_tag))
 
   -- Clean up the component name by removing any trailing characters like '>' or "'"
+  local until_space = component_name:match("(.-)%s")
+  if until_space then
+    component_name = until_space
+  end
+
   component_name = component_name:gsub("[<@/> ]", "")
 
   if component_name then
