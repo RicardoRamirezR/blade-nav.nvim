@@ -69,7 +69,7 @@ use {
 
     > The "++p" flag creates the parent directory of the file if it does not exist.
     > For example if you edit "foo/bar/file.txt", the ":write ++p" command creates
-    >"foo/bar/" if necessary before writing the file. >
+    >"foo/bar/" if necessary before writing the file.
 
   - Place the cursor over the file name and use the `gf` command.
     - If the component view exists but there is no corresponding class, it 
