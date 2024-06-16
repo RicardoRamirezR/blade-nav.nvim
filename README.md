@@ -64,18 +64,23 @@ use {
 ## Usage
 
 1. **To navigate to a Blade file or its corresponding class**:
+    If the file does not exist and is in a subfolder that does not exist yet,
+    you should create the directory, it can be done writing the file using ++p  
+
+    > The "++p" flag creates the parent directory of the file if it does not exist.
+    > For example if you edit "foo/bar/file.txt", the ":write ++p" command creates
+    >"foo/bar/" if necessary before writing the file. >
 
   - Place the cursor over the file name and use the `gf` command.
     - If the component view exists but there is no corresponding class, it 
     opens the view file.
     - If the class exists but not its view, the class is opened.
-    - If neither exists, it presents three options: open the view, open the 
-    class, or run an Artisan command to create the component.
-    - If it is an `<x-` component like `<x-form>` and it does not exist, a
-    fourth option will be presented to create an Anonymous Index Component at 
-    `resources/views/components/form/index.blade.php`. After selecting this
-    option, a new buffer is opened, and you should create the form directory,
-    it can be done using the write command `:write ++p`.
+    - If neither exists and is a Livewire component, it presents the option to
+    create the component using `php artisan make:livewire`.
+    - If neither exists and is a Blade component, it can present two or three
+    options, depending on the component type. The options are, create the view
+    component and cretate the component via `php artisan make:component`. A
+    third option will be presented if you want to create an Anonymous Index Component.
 
 2. **To navigate using the custom source** with nvim-cmp (Requires nvim-cmp to be installed and configured), write either:
 

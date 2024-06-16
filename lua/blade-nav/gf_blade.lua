@@ -8,8 +8,7 @@ end
 
 local function excec_action(selection)
   local selected = selection:gsub("^%d+%.%s*", "")
-  local option = tonumber(string.match(selection, "^%d+%."))
-  if option == 3 then
+  if selected:find("artisan") then
     local success, errorMsg = os.execute(selected)
     if success then
       print("\nCommand executed successfully")
@@ -19,6 +18,15 @@ local function excec_action(selection)
   else
     vim.cmd("edit " .. selected)
   end
+end
+
+local function create_or_select(options)
+  for _, option in ipairs(options) do
+    if option:find("artisan") ~= nil then
+      return "Create component"
+    end
+  end
+  return "Select Component File"
 end
 
 local function component_picker_telescope(opts, options)
@@ -32,7 +40,7 @@ local function component_picker_telescope(opts, options)
 
   pickers
       .new(opts, {
-        prompt_title = (#options >= 3) and "Create component" or "Select Component File",
+        prompt_title = create_or_select(options),
         finder = finders.new_table(options),
         sorter = conf.generic_sorter(opts),
         attach_mappings = function(bufnr, _)
@@ -49,7 +57,7 @@ local function component_picker_telescope(opts, options)
 end
 
 local function component_picker_native(options)
-  local choice_str = (#options >= 3) and "Create component:\n" or "Choose a file:\n"
+  local choice_str = create_or_select(options) .. ":\n"
   for _, option in ipairs(options) do
     choice_str = choice_str .. option .. "\n"
   end
@@ -116,14 +124,15 @@ local function get_component_type_and_name()
   end
 
   -- Match the component pattern from the cursor position to the end of the line
-  local end_tag = line:sub(col):match("[ >)]")
+  local end_tag = line:sub(col):match("[ %>)]")
   if not end_tag then
     print("No end tag found")
     return
   end
 
   -- Concatenate the start and end tag parts
-  local component_name = line:sub(line:find(start_tag), line:find(end_tag))
+  local colmun_start = line:find(start_tag)
+  local component_name = line:sub(colmun_start, line:find(end_tag, colmun_start))
 
   -- Clean up the component name by removing any trailing characters like '>' or "'"
   local until_space = component_name:match("(.-)%s")
@@ -231,21 +240,25 @@ function M.gf()
     return true
   end
 
+  local has_options = false
   if #choices == 0 then
     local component = capitalize(remove_prefix(component_name, prefix))
-    table.insert(choices, "1. " .. file_path)
-    table.insert(choices, "2. " .. class_path)
-    if string.find(prefix, "livewire") then
-      table.insert(choices, "3. php artisan make:livewire " .. component:gsub("['()%)]", ""))
-    else
-      table.insert(choices, "3. php artisan make:component " .. component)
-    end
     if prefix == "x-" and component_name:find("%.") == nil then
-      table.insert(choices, "4. " .. file_path:gsub("%.blade%.php$", "/index.blade.php"))
+      has_options = true
+      table.insert(choices, "1. " .. file_path)
+      if component_name:find("%.") == nil then
+        table.insert(choices, (#choices + 1) .. ". " .. file_path:gsub("%.blade%.php$", "/index.blade.php"))
+      end
+      table.insert(choices, (#choices + 1) .. ". php artisan make:component " .. component)
+    end
+
+    if string.find(prefix, "livewire") then
+      has_options = true
+      table.insert(choices, "1. php artisan make:livewire " .. component:gsub("['()%)]", ""))
     end
   end
 
-  if #choices >= 2 then
+  if #choices >= 2 or has_options then
     component_picker(choices)
     return true
   end
