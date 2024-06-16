@@ -64,8 +64,9 @@ use {
 ## Usage
 
 1. **To navigate to a Blade file or its corresponding class**:
+   
     If the file does not exist and is in a subfolder that does not exist yet,
-    you should create the directory, it can be done writing the file using ++p  
+    you should create the directory, it can be done writing the file using `++p`  
 
     > The "++p" flag creates the parent directory of the file if it does not exist.
     > For example if you edit "foo/bar/file.txt", the ":write ++p" command creates
