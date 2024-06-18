@@ -136,7 +136,7 @@ M.setup = function()
   local current_sources = cmp.get_config().sources
   local new_sources = {}
 
-  table.insert(new_sources, { name = "blade-nav" })
+  table.insert(new_sources, { name = "blade-nav", priority = 1000 })
   for _, current_source in ipairs(current_sources) do
     table.insert(new_sources, current_source)
   end

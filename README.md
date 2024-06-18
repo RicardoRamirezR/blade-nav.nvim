@@ -83,13 +83,19 @@ use {
     component and cretate the component via `php artisan make:component`. A
     third option will be presented if you want to create an Anonymous Index Component.
 
-2. **To navigate using the custom source** with nvim-cmp (Requires nvim-cmp to be installed and configured), write either:
+2. **To navigate using the custom source** with nvim-cmp (Requires nvim-cmp to 
+be installed and configured), write either:
+  - in a Blade file:
+    - `@extends`
+    - `@include`
+    - `<x-`
+    - `<livewire`
+    - `@livewire`
 
-- `@extends`
-- `@include`
-- `<x-`
-- `<livewire`
-- `@livewire`
+  - in a Controller or Route:
+    - `Route::view('url', 'name')`
+    - `View::make('name')`
+    - `view('name')`
 
 And the list of files will appear, and with the magic of cmp the list if fitered while you write
 
