@@ -28,7 +28,7 @@ M.setup = function()
   end
 
   source.get_keyword_pattern = function()
-    return [[\(view\w*\|View::make\w*\|Route::view\w*\)]]
+    return [[\(view\|View::make\|Route::view\)\(('\)*\w*]]
   end
 
   local function get_blade_files()
@@ -45,13 +45,13 @@ M.setup = function()
   end
 
   source.complete = function(_, request, callback)
-    local input = string.sub(request.context.cursor_before_line, request.offset - 1)
+    local input = string.sub(request.context.cursor_before_line, request.offset - 1):gsub("%s+", "")
 
     -- Define patterns to match and corresponding completion items
     local patterns = {
-      { pattern = "Route::view%s*", item = " Route::view('uri', '%s')" },
-      { pattern = "View::make%s*",  item = " View::make('%s')" },
-      { pattern = "view%s*",        item = " view('%s')" },
+      { pattern = "Route::view%s*", item = "Route::view('uri', '%s')" },
+      { pattern = "View::make%s*",  item = "View::make('%s')" },
+      { pattern = "view%s*",        item = "view('%s')" },
     }
 
     local items = {}
