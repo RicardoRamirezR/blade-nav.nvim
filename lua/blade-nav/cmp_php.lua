@@ -17,6 +17,7 @@ M.setup = function()
     return
   end
 
+  local utils = require("blade-nav.utils")
   local source = {}
 
   source.new = function()
@@ -29,19 +30,6 @@ M.setup = function()
 
   source.get_keyword_pattern = function()
     return [[\(view\|View::make\|Route::view\)\(('\)*\w*]]
-  end
-
-  local function get_blade_files()
-    local handle = io.popen('find resources/views -type f -name "*.blade.php" | sort')
-    local result = handle:read("*a")
-    handle:close()
-
-    local files = {}
-    for file in result:gmatch("[^\r\n]+") do
-      table.insert(files, file)
-    end
-
-    return files
   end
 
   source.complete = function(_, request, callback)
@@ -57,11 +45,9 @@ M.setup = function()
     local items = {}
     for _, p in ipairs(patterns) do
       if input:match(p.pattern) then
-        local blade_files = get_blade_files()
-        for _, file in ipairs(blade_files) do
-          local view_name = file:match("resources/views/(.*)%.blade%.php$")
+        local blade_files = utils.get_blade_files()
+        for _, view_name in ipairs(blade_files) do
           if view_name then
-            view_name = view_name:gsub("/", ".")
             table.insert(items, {
               filterText = input .. view_name,
               label = p.item:format(view_name):gsub("^%s+", ""),
