@@ -8,17 +8,22 @@ COQsources["blade-nav"] = nil
 COQsources["blade-nav"] = {
   name = "blade-nav",
   fn = function(_, callback)
-    local patterns = {
-      { pattern = "%s*Route::view%s*", item = "Route::view('uri', '%s')" },
-      { pattern = "%sView::make%s*",   item = "View::make('%s')" },
-      { pattern = "%sview%s*",         item = "view('%s')" },
-    }
+    if vim.bo.filetype ~= "php" then
+      callback()
+    end
+
     local pattern = [[\C\(\sview\|\sView::make\|\s\?Route::view\)\(('\)\?]]
     local input = vim.api.nvim_get_current_line()
 
     if vim.fn.match(input, pattern) == -1 then
       return callback()
     end
+
+    local patterns = {
+      { pattern = "%s*Route::view%s*", item = "Route::view('uri', '%s')" },
+      { pattern = "%sView::make%s*",   item = "View::make('%s')" },
+      { pattern = "%sview%s*",         item = "view('%s')" },
+    }
 
     local items = {}
     for _, p in ipairs(patterns) do

@@ -37,7 +37,10 @@ Open Blade views from controller or route definitions like
 ## Features
 
 - Utilizes the `gf` (goto file) command for navigation.
-- Provides a custom source for nvim-cmp (requires installation and configuration) for component selection.
+- Provides a custom source for [nvim-cmp](https://github.com/hrsh7th/nvim-cmp)
+  (requires installation and configuration) for component selection.
+- Provides a custom source for [coq](https://github.com/ms-jpq/coq_nvim) (requires
+  installation and configuration) in component selection in Controllers and Routes.
 
 ## Installation
 
@@ -83,8 +86,7 @@ use {
     component and cretate the component via `php artisan make:component`. A
     third option will be presented if you want to create an Anonymous Index Component.
 
-2. **To navigate using the custom source** with nvim-cmp (Requires nvim-cmp to 
-be installed and configured), write either:
+2. **To navigate using the custom source**, write either:
   - in a Blade file:
     - `@extends`
     - `@include`
@@ -97,7 +99,8 @@ be installed and configured), write either:
     - `View::make('name')`
     - `view('name')`
 
-And the list of files will appear, and with the magic of cmp the list if fitered while you write
+And the list of files will appear, and with the magic of completion the list if fitered while you write. For coq, 
+`coq_settings.match.max_results` limits the result shown.
 
 ## Configuration
 
