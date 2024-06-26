@@ -40,7 +40,7 @@ Open Blade views from controller or route definitions like
 - Provides a custom source for [nvim-cmp](https://github.com/hrsh7th/nvim-cmp)
   (requires installation and configuration) for component selection.
 - Provides a custom source for [coq](https://github.com/ms-jpq/coq_nvim) (requires
-  installation and configuration) in component selection in Controllers and Routes.
+  installation and configuration).
 
 ## Installation
 
@@ -129,3 +129,4 @@ This plugin is open-source and distributed under the MIT License. See the LICENS
 ## Acknowledgments
 
 Special thanks to the Neovim and Laravel communities for their continuous support and contributions.
+

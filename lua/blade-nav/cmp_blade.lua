@@ -1,59 +1,10 @@
 -- Custom nvim-cmp source for Laravel components
 
+local utils = require("blade-nav.utils")
+
 local M = {}
 
 local registered = false
-
-local function determine_prefix_and_suffix(input)
-  input = input:match("^%s*(.-)%s*$")
-  local prefix_map = {
-    ["<x-"] = { prefix = "<x-", suffix = " />" },
-    ["<live"] = { prefix = "<livewire:", suffix = " />" },
-    ["@live"] = { prefix = "@livewire('", suffix = "')" },
-    ["@exte"] = { prefix = "@extends('", suffix = "')" },
-    ["@incl"] = { prefix = "@include('", suffix = "')" },
-  }
-
-  local prefix = nil
-  local suffix = nil
-
-  for key, value in pairs(prefix_map) do
-    if vim.startswith(input, key) then
-      prefix = value.prefix
-      suffix = value.suffix
-      break
-    end
-  end
-
-  return prefix, suffix
-end
-
-local function get_components(prefix)
-  local component_dirs = {
-    ["@livewire('"] = "resources/views/livewire/",
-    ["<livewire:"] = "resources/views/livewire/",
-    ["@include('"] = "resources/views/",
-    ["@extends('"] = "resources/views/",
-    ["<x-"] = "resources/views/components/",
-  }
-
-  local components_dir = component_dirs[prefix]
-  local components = {}
-  local handle = io.popen("find " .. components_dir .. " -type f")
-
-  for filename in handle:lines() do
-    local component_name = filename:match(components_dir .. "(.+)")
-    if component_name then
-      component_name = component_name:gsub("^/", ""):gsub("%.blade%.php$", "")
-      component_name = prefix .. component_name:gsub("/", ".")
-      table.insert(components, { label = component_name })
-    end
-  end
-
-  handle:close()
-
-  return components
-end
 
 M.setup = function()
   if registered then
@@ -87,7 +38,7 @@ M.setup = function()
   source.complete = function(self, request, callback)
     local bufnr = vim.api.nvim_get_current_buf()
     local input = string.sub(request.context.cursor_before_line, request.offset - 1)
-    local prefix, suffix = determine_prefix_and_suffix(input)
+    local prefix, suffix = utils.determine_prefix_and_suffix(input)
 
     if not prefix then
       callback({ isIncomplete = true })
@@ -104,7 +55,7 @@ M.setup = function()
     end
 
     local items = {}
-    local components = get_components(prefix)
+    local components = utils.get_components(prefix)
 
     for _, component in ipairs(components) do
       table.insert(items, {

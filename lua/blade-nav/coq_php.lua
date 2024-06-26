@@ -3,9 +3,9 @@ local utils = require("blade-nav.utils")
 -- `COQsources` is a global registry of sources
 COQsources = COQsources or {}
 
-COQsources["blade-nav"] = nil
+COQsources["blade-nav-php"] = nil
 
-COQsources["blade-nav"] = {
+COQsources["blade-nav-php"] = {
   name = "blade-nav",
   fn = function(_, callback)
     if vim.bo.filetype ~= "php" then
@@ -32,7 +32,7 @@ COQsources["blade-nav"] = {
         for _, view_name in ipairs(blade_files) do
           table.insert(items, {
             label = p.item:format(view_name):gsub("^%s+", ""),
-            kind = require("cmp.types.lsp").CompletionItemKind.Reference,
+            kind = vim.lsp.protocol.CompletionItemKind.Reference,
             insertText = p.item:format(view_name),
           })
         end
