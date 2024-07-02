@@ -1,4 +1,5 @@
 -- Custom opener for Laravel components
+local utils = require("blade-nav.utils")
 
 local M = {}
 local rhs
@@ -27,6 +28,12 @@ local function exec_native_gf()
 end
 
 function M.gf()
+  if utils.in_array(vim.bo.filetype, { "blade", "php" }) then
+    if require("blade-nav.gf_routes").gf() then
+      return
+    end
+  end
+
   if vim.bo.filetype == "blade" then
     if require("blade-nav.gf_blade").gf() then
       return

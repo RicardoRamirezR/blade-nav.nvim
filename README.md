@@ -1,7 +1,8 @@
 # blade-nav.nvim
-Navigating Blade views within Laravel projects
+Navigating Blade views and routes within Laravel projects
 
-`blade-nav.nvim` is a Neovim plugin that enhances navigation within Laravel projects by allowing quick access to Blade files and their corresponding classes. This plugin simplifies moving between controllers, routes, Blade views, and components in Laravel applications.
+`blade-nav.nvim` is a Neovim plugin designed to enhance navigation within Laravel projects. It allows quick access to Blade files and their corresponding classes, and enables navigation to the controller associated with a route name. This plugin simplifies moving between controllers, routes, Blade views, and components in Laravel applications.
+
 
 ## In a Blade file
 
@@ -33,6 +34,8 @@ Open Blade views from controller or route definitions like
 - `View::make('name')`
 - `view('name')`
 
+### From any PHP or Blade file:
+- Open the controller associated with the route name: `route('name')`
 
 ## Features
 
@@ -99,8 +102,11 @@ use {
     - `View::make('name')`
     - `view('name')`
 
-And the list of files will appear, and with the magic of completion the list if fitered while you write. For coq, 
-`coq_settings.match.max_results` limits the result shown.
+    And the list of files will appear, and with the magic of completion the list if fitered while you write. For coq, 
+    `coq_settings.match.max_results` limits the result shown.
+    
+3. **To navigate to a controller associated with a route name**:
+    - Place the cursor over the route name and use the `gf` command.
 
 ## Configuration
 
@@ -129,4 +135,3 @@ This plugin is open-source and distributed under the MIT License. See the LICENS
 ## Acknowledgments
 
 Special thanks to the Neovim and Laravel communities for their continuous support and contributions.
-

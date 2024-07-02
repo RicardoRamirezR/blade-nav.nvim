@@ -67,4 +67,14 @@ M.get_components = function(prefix)
 
   return components
 end
+
+M.in_array = function(needle, haystack)
+  for _, value in ipairs(haystack) do
+    if value == needle then
+      return true
+    end
+  end
+  return false
+end
+
 return M
