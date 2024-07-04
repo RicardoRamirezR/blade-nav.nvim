@@ -77,4 +77,23 @@ M.in_array = function(needle, haystack)
   return false
 end
 
+M.get_route_names = function()
+  local handle = io.popen("php artisan route:list --json --columns=name")
+  if not handle then
+    return {}
+  end
+
+  local result = handle:read("*a")
+  handle:close()
+
+  local routes = vim.fn.json_decode(result)
+  local route_map = {}
+
+  for _, route in ipairs(routes) do
+    table.insert(route_map, route.name)
+  end
+
+  return route_map
+end
+
 return M

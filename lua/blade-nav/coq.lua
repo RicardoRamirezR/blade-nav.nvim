@@ -8,6 +8,7 @@ M.setup = function()
 
   require("blade-nav.coq_blade")
   require("blade-nav.coq_php")
+  require("blade-nav.coq_routes")
 end
 
 return M

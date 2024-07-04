@@ -1,8 +1,11 @@
 # blade-nav.nvim
 Navigating Blade views and routes within Laravel projects
 
-`blade-nav.nvim` is a Neovim plugin designed to enhance navigation within Laravel projects. It allows quick access to Blade files and their corresponding classes, and enables navigation to the controller associated with a route name. This plugin simplifies moving between controllers, routes, Blade views, and components in Laravel applications.
-
+`blade-nav.nvim` is a Neovim plugin designed to enhance navigation within 
+Laravel projects. It allows quick access to Blade files and their corresponding
+classes, and enables navigation to the controller associated with a route name.
+This plugin simplifies moving between controllers, routes, Blade views, and
+components in Laravel applications.
 
 ## In a Blade file
 
@@ -89,7 +92,10 @@ use {
     component and cretate the component via `php artisan make:component`. A
     third option will be presented if you want to create an Anonymous Index Component.
 
-2. **To navigate using the custom source**, write either:
+2. **To navigate to a controller associated with a route name**:
+    - Place the cursor over the route name and use the `gf` command.
+
+3. **Select an existing resource using the custom source**, write either:
   - in a Blade file:
     - `@extends`
     - `@include`
@@ -102,12 +108,13 @@ use {
     - `View::make('name')`
     - `view('name')`
 
-    And the list of files will appear, and with the magic of completion the list if fitered while you write. For coq, 
-    `coq_settings.match.max_results` limits the result shown.
-    
-3. **To navigate to a controller associated with a route name**:
-    - Place the cursor over the route name and use the `gf` command.
+  - in any PHP or Blade file (coq only):
+    - `route('`
 
+    And the list of files will appear, and with the magic of completion the
+    list if filtered while you write. For coq, `coq_settings.match.max_results`
+    limits the result shown.
+    
 ## Configuration
 
 No additional configuration is required. The plugin works out-of-the-box with the default `gf` command.
