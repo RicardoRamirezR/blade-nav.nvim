@@ -1,5 +1,5 @@
 # blade-nav.nvim
-Navigating Blade views and routes within Laravel projects
+Navigating Blade views, routes and configs within Laravel projects
 
 `blade-nav.nvim` is a Neovim plugin designed to enhance navigation within 
 Laravel projects. It allows quick access to Blade files and their corresponding
