@@ -6,9 +6,7 @@ M.setup = function()
     return
   end
 
-  require("blade-nav.coq_blade")
-  require("blade-nav.coq_php")
-  require("blade-nav.coq_routes")
+  require("blade-nav.coq_all")
 end
 
 return M

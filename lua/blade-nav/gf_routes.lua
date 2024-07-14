@@ -28,7 +28,17 @@ local function get_routes(route_name)
   local result = handle:read("*a")
   handle:close()
 
-  local routes = vim.fn.json_decode(result)
+  if result:find("Your application doesn't have any routes matching the given criteria") then
+    vim.notify("No matching routes found for the given criteria")
+    return {}
+  end
+
+  local ok, routes = pcall(vim.fn.json_decode, result)
+  if not ok then
+    vim.notify("Error parsing JSON output")
+    return {}
+  end
+
   local route_map = {}
 
   for _, route in ipairs(routes) do
@@ -61,52 +71,8 @@ local function resolve_controller_path(controller, psr4_mappings)
   return nil
 end
 
-local function extract_route_name()
-  local line = vim.fn.getline(".")
-  local cursor_col = vim.fn.col(".")
-  local pattern = "route%s*%(%s*['\"]([%w%.%-]+)['\"]"
-
-  local start_idx, end_idx, route_name = line:find(pattern)
-
-  if start_idx and end_idx then
-    end_idx = end_idx + 1
-    if cursor_col >= start_idx and cursor_col <= end_idx then
-      return route_name
-    end
-  end
-
-  return nil
-end
-
-local function get_root_and_lang()
-  local parsers = require("nvim-treesitter.parsers")
-  local parser = parsers.get_parser()
-
-  if not parser then
-    vim.notify("Failed to parse the tree.", vim.lsp.log_levels.ERROR)
-    return nil, nil
-  end
-
-  local tree = parser:parse()[1]
-
-  if not tree then
-    vim.notify("Failed to parse the tree.", vim.lsp.log_levels.ERROR)
-    return nil, nil
-  end
-
-  local root = tree:root()
-  local lang = parser:lang()
-
-  if lang ~= "php" then
-    vim.notify("Info: works only on PHP.")
-    return nil, nil
-  end
-
-  return root, lang
-end
-
 local function goto_method(method_name)
-  local root, lang = get_root_and_lang()
+  local root, lang = utils.get_root_and_lang()
   if not root then
     return
   end
@@ -134,11 +100,8 @@ local function goto_method(method_name)
   end
 end
 
-M.gf = function()
-  local route_name = extract_route_name()
-
+M.gf = function(route_name)
   if not route_name then
-    vim.notify("Route definition not found")
     return
   end
 
