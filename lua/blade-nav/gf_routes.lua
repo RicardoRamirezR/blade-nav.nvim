@@ -20,7 +20,7 @@ local function get_psr4_mappings()
 end
 
 local function get_routes(route_name)
-  local handle = io.popen("php artisan route:list --name=" .. route_name .. " --json --columns=name,action")
+  local handle = io.popen("php artisan route:list --name=" .. route_name .. " --json")
   if not handle then
     return {}
   end
