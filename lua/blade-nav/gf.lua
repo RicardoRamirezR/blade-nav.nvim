@@ -267,7 +267,8 @@ function M.gf()
 
   local fn = gf_module(prefix)
   if fn then
-    local module = package.loaded[fn] or require(fn)
+    local module_name = "blade-nav." .. fn
+    local module = package.loaded[module_name] or require(module_name)
 
     if module and type(module.gf) == "function" then
       return pcall(module.gf, component_name)
