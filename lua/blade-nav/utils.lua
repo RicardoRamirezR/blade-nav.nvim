@@ -82,15 +82,12 @@ M.in_table = function(needle, table)
 end
 
 M.get_route_names = function()
-  local obj = vim
-      .system({
-        "php",
-        "artisan",
-        "route:list",
-        "--json",
-        "--columns=name",
-      }, { text = true })
-      :wait()
+  local obj = vim.system({
+    "php",
+    "artisan",
+    "route:list",
+    "--json",
+  }, { text = true }):wait()
 
   if obj.code ~= 0 then
     vim.notify("Error running artisan route:list")
