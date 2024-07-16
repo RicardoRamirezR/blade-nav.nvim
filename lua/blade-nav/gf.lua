@@ -52,7 +52,7 @@ end
 local function find_name(text_input, col)
   local text = text_input:gsub("%s+", " ")
   col = col - (#text_input - #text)
-  local start_pos, end_pos = text:find("[%s>%)]", col)
+  local start_pos, end_pos = text:find("[,%s>%)]", col)
   if not start_pos then
     return
   end
