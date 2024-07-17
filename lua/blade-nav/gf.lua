@@ -6,6 +6,16 @@ local rhs
 
 local registered = false
 
+local function explode(delimiter, text)
+  local result = {}
+  local pattern = string.format("([^%s]+)", delimiter)
+  for match in string.gmatch(text, pattern) do
+    matched = match:gsub("[%-.]", "/")
+    table.insert(result, matched)
+  end
+  return result
+end
+
 local function get_keymap_rhs(mode, lhs)
   local mappings = vim.api.nvim_get_keymap(mode)
   for _, mapping in ipairs(mappings) do
@@ -31,18 +41,24 @@ local function extract_prefix_name(text)
   local patterns = {
     "(%S+)%s*%(%s*['\"]([%w%.%-%_]+)['\"]%s*,%s*['\"]([%w%.%-%_]+)['\"]%s*%)",
     "@*(%S+)%s*%(%s*['\"]([%w%.%-%_]+)['\"]",
+    "<(x%-)([%w%-%_]+)(::)([%w%-%.%_]+)%s*[^>]*%s*/?>?",
     "<(x%-)([%w%-%.%_]+)%s*[^>]*%s*/?>?",
     "<(livewire)%:([%w%-%.]+)%s*[^>]*%s*/?>?",
     "(%S+)%s*%(%s*%[%s*['\"]([%w%.%-%_]+)['\"]%s*=>",
   }
 
   for _, pattern in ipairs(patterns) do
-    local name, param1, param2 = text:match(pattern)
+    local name, param1, param2, param3 = text:match(pattern)
+    if param2 == "::" then
+      return "package", param1 .. "," .. param3
+    end
+
     if name and name == "Route::view" then
       if param2 then
         return name, param2
       end
     end
+
     if name and param1 then
       return name, param1
     end
@@ -68,7 +84,6 @@ local function find_name(text_input, col)
   -- print(string.rep("_", col - 1) .. "^   " .. "(" .. col .. ")")
   col = start_pos - 1
   -- print(string.rep("_", start_pos - 1) .. "^   " .. "(" .. start_pos .. ")")
-
   if not end_tag then
     return
   end
@@ -233,12 +248,54 @@ local function livewire_component(component_name)
   }
 end
 
+local function check_for_filament_support(text)
+  local support = {
+    "actions",
+    "avatar",
+    "badge",
+    "breadcrumbs",
+    "button",
+    "card",
+    "dropdown",
+    "fieldset",
+    "grid",
+    "icon",
+    "icon-button",
+    "input",
+    "link",
+    "loading-indicator",
+    "loading-section",
+    "modal",
+    "pagination",
+    "section",
+    "tabs",
+  }
+
+  local package_name = text[1]
+  local component_name = text[2]
+  if utils.in_table(component_name, support) then
+    package_name = package_name .. "/support"
+  end
+
+  return package_name, component_name
+end
+
+local function package_component(text)
+  text = explode(",", text)
+  local package_name, component_name = check_for_filament_support(text)
+  return {
+    "vendor/" .. package_name .. "/resources/views/components/" .. component_name .. ".blade.php",
+    nil,
+  }
+end
+
 local function get_paths(prefix, component_name)
   local prefix_map = {
     ["extends"] = laravel_view,
     ["include"] = laravel_view,
     ["livewire"] = livewire_component,
     ["x-"] = laravel_component,
+    ["package"] = package_component,
   }
 
   return prefix_map[prefix](component_name)
@@ -253,7 +310,7 @@ local function gf_module(prefix)
 
   for _, gf in ipairs(gfs) do
     if utils.in_table(prefix, gf.prefixes) then
-      return "blade-nav." .. gf.fn
+      return gf.fn
     end
   end
 end
