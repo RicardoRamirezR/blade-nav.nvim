@@ -253,7 +253,7 @@ local function gf_module(prefix)
 
   for _, gf in ipairs(gfs) do
     if utils.in_table(prefix, gf.prefixes) then
-      return gf.fn
+      return "blade-nav." .. gf.fn
     end
   end
 end
