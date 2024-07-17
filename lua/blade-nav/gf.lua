@@ -253,7 +253,7 @@ local function gf_module(prefix)
 
   for _, gf in ipairs(gfs) do
     if utils.in_table(prefix, gf.prefixes) then
-      return gf.fn
+      return "blade-nav." .. gf.fn
     end
   end
 end
@@ -267,8 +267,7 @@ function M.gf()
 
   local fn = gf_module(prefix)
   if fn then
-    local module_name = "blade-nav." .. fn
-    local module = package.loaded[module_name] or require(module_name)
+    local module = package.loaded[fn] or require(fn)
 
     if module and type(module.gf) == "function" then
       return pcall(module.gf, component_name)
