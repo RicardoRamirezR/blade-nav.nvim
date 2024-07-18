@@ -299,7 +299,6 @@ local function get_components_aliases()
       :wait()
 
   if obj.code ~= 0 then
-    vim.notify("Error running artisan blade-nav:components-aliases")
     return {}
   end
 
