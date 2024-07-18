@@ -33,13 +33,13 @@ class BladeNav extends Command
             foreach ($aliases as $name => $alias) {
                 if (strpos($alias, $class) === 0) {
                     foreach ($dirs as $dir) {
-                        $component = str_replace($class, '', $alias);
-                        $component = str_replace('\\', '/', $component);
-                        $components[$name] = $dir . '/' . $component . '.php' . "\n";
+                        $component = str_replace([$class, '\\'], ['', '/'], $alias);
+                        $components[$name] = "{$dir}/{$component}.php";
                     }
                 }
             }
         }
-        echo  json_encode($components);
+
+        echo json_encode($components);
     }
 }

@@ -417,6 +417,21 @@ function M.gf()
   end
 end
 
+local function create_command()
+  vim.api.nvim_create_user_command("BladeNavInstallArtisanCommand", function()
+    local script_path = debug.getinfo(1, "S").source:sub(2)
+    local script_dir = script_path:match("(.*/)")
+    local source = script_dir .. "../../BladeNav.php"
+    local dest = vim.fn.getcwd() .. "/app/Console/Commands/BladeNav.php"
+
+    vim.fn.system({ "cp", source, dest })
+
+    print("BladeNav.php has been copied to app/Console/Commands/")
+  end, {
+    desc = "Copy BladeNav.php to app/Console/Commands/BladeNav.php",
+  })
+end
+
 M.setup = function()
   if registered then
     return
@@ -430,6 +445,8 @@ M.setup = function()
     M.cfile = vim.fn.expand("<cfile>")
     M.gf()
   end, { noremap = true, silent = true, desc = "BladeNav: Open file under cursor" })
+
+  create_command()
 end
 
 return M
