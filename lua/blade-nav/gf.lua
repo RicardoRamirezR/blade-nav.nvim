@@ -289,6 +289,33 @@ local function package_component(text)
   }
 end
 
+local function get_components_aliases()
+  local obj = vim
+      .system({
+        "php",
+        "artisan",
+        "blade-nav:components-aliases",
+      }, { text = true })
+      :wait()
+
+  if obj.code ~= 0 then
+    vim.notify("Error running artisan blade-nav:components-aliases")
+    return {}
+  end
+
+  local routes = vim.fn.json_decode(obj.stdout)
+  return routes
+end
+
+local function component_alias(component_name)
+  local components_aliases = get_components_aliases()
+  local filename = components_aliases[component_name]
+  if filename then
+    vim.cmd("edit " .. filename)
+    return true
+  end
+end
+
 local function get_paths(prefix, component_name)
   local prefix_map = {
     ["extends"] = laravel_view,
@@ -329,6 +356,10 @@ function M.gf()
     if module and type(module.gf) == "function" then
       return pcall(module.gf, component_name)
     end
+  end
+
+  if component_alias(component_name) then
+    return
   end
 
   component_name = string.gsub(component_name, "%.", "/")
