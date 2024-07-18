@@ -290,20 +290,21 @@ local function package_component(text)
 end
 
 local function get_components_aliases()
-  local obj = vim
-      .system({
-        "php",
-        "artisan",
-        "blade-nav:components-aliases",
-      }, { text = true })
-      :wait()
+  local ok, obj = pcall(function()
+    return vim
+        .system({
+          "php",
+          "artisan",
+          "blade-nav:components-aliases",
+        }, { text = true })
+        :wait()
+  end)
 
-  if obj.code ~= 0 then
+  if not ok or obj.code ~= 0 then
     return {}
   end
 
-  local routes = vim.fn.json_decode(obj.stdout)
-  return routes
+  return vim.fn.json_decode(obj.stdout)
 end
 
 local function component_alias(component_name)
