@@ -33,23 +33,7 @@ M.setup = function()
   end
 
   source.get_keyword_pattern = function()
-    local components_keywords = {
-      "<x-",
-      "<livewire:",
-    }
-    local functions_keywords = {
-      "@extends",
-      "@include",
-      "@livewire",
-      "route",
-      "view",
-      "View::make",
-      "Route::view",
-    }
-    local functions_pattern = [[\(]] .. table.concat(functions_keywords, "\\|") .. [[\)\(('\)*\w*]]
-    local components_pattern = [[\(]] .. table.concat(components_keywords, "\\|") .. [[\)\w*]]
-
-    return functions_pattern .. [[\|]] .. components_pattern
+    return utils.get_keyword_pattern()
   end
 
   source.complete = function(_, request, callback)

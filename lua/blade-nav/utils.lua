@@ -173,6 +173,7 @@ end
 
 M.get_view_names = function(input)
   local patterns = {
+    { pattern = "to_route%(",    tpl = "to_route('%s')",           ft = { "blade", "php" }, fn = find_routes },
     { pattern = "route%(",       tpl = "route('%s')",              ft = { "blade", "php" }, fn = find_routes },
     { pattern = "<x%-",          tpl = "<x-%s />",                 ft = "blade",            fn = find_components },
     { pattern = "<livewire",     tpl = "<livewire:%s />",          ft = "blade",            fn = find_livewire },
@@ -215,6 +216,7 @@ M.get_keyword_pattern = function()
     "@include",
     "@livewire",
     "route",
+    "to_route",
     "view",
     "View::make",
     "Route::view",
@@ -230,14 +232,14 @@ M.get_root_and_lang = function()
   local parser = parsers.get_parser()
 
   if not parser then
-    vim.notify("Failed to parse the tree.", vim.lsp.log_levels.ERROR)
+    vim.notify("Failed to parse the tree.", vim.log.levels.ERROR)
     return nil, nil
   end
 
   local tree = parser:parse()[1]
 
   if not tree then
-    vim.notify("Failed to parse the tree.", vim.lsp.log_levels.ERROR)
+    vim.notify("Failed to parse the tree.", vim.log.levels.ERROR)
     return nil, nil
   end
 
