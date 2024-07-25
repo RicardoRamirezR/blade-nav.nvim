@@ -1,4 +1,5 @@
 -- Custom opener for blade views
+local utils = require("blade-nav.utils")
 local M = {}
 
 local ts = vim.treesitter
@@ -59,22 +60,28 @@ function M.get_view_name()
   return find_view_name(node)
 end
 
-function M.gf()
-  local view = M.get_view_name()
+function M.gf(view)
+  if view then
+    view = view:gsub("%.", "/") .. ".blade.php"
+  else
+    view = M.get_view_name()
+  end
 
   if not view then
     return
   end
 
-  local dot_git_path = vim.fn.finddir(".git", ".;")
-  dot_git_path = vim.fn.fnamemodify(dot_git_path, ":h")
-  if dot_git_path:sub(1, 1) == "." then
-    dot_git_path = ""
-  else
-    dot_git_path = dot_git_path .. "/"
+  local root_dir = utils.get_root_dir()
+  if not root_dir or root_dir == "" then
+    root_dir = vim.fn.finddir(".git", ".;")
+    root_dir = vim.fn.fnamemodify(root_dir, ":h")
+    if root_dir:sub(1, 1) == "." then
+      root_dir = ""
+    end
   end
 
-  vim.cmd("edit " .. dot_git_path .. "resources/views/" .. view)
+  vim.cmd("edit " .. root_dir:gsub("[\r\n]", "") .. "/resources/views/" .. view)
+
   return true
 end
 

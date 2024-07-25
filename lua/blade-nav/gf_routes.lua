@@ -1,32 +1,17 @@
+local utils = require("blade-nav.utils")
+
 local M = {}
 
-local function get_psr4_mappings()
-  local file = io.open("composer.json", "r")
-
-  if not file then
-    vim.notify("Could not open composer.json")
-    return
-  end
-
-  local content = file:read("*a")
-  file:close()
-
-  local decoded = vim.fn.json_decode(content)
-  if not decoded or not decoded.autoload or not decoded.autoload["psr-4"] then
-    return {}
-  end
-
-  return decoded.autoload["psr-4"]
-end
-
 local function get_routes(route_name)
-  local handle = io.popen("php artisan route:list --name=" .. route_name .. " --json")
-  if not handle then
-    return {}
-  end
-
-  local result = handle:read("*a")
-  handle:close()
+  local result = M.execute_command_silent({
+    "php",
+    "artisan",
+    "route:list",
+    "--name=",
+    route_name,
+    "--json",
+    "--columns=name,action",
+  })
 
   if result:find("Your application doesn't have any routes matching the given criteria") then
     vim.notify("No matching routes found for the given criteria")
@@ -106,7 +91,7 @@ M.gf = function(route_name)
   end
 
   local route_map = get_routes(route_name)
-  local psr4_mappings = get_psr4_mappings()
+  local psr4_mappings = utils.get_psr4_mappings()
 
   if not route_map[route_name] then
     vim.notify("Route definition not found")

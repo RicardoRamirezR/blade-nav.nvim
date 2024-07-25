@@ -6,16 +6,6 @@ local rhs
 
 local registered = false
 
-local function explode(delimiter, text)
-  local result = {}
-  local pattern = string.format("([^%s]+)", delimiter)
-  for match in string.gmatch(text, pattern) do
-    matched = match:gsub("[%-.]", "/")
-    table.insert(result, matched)
-  end
-  return result
-end
-
 local function get_keymap_rhs(mode, lhs)
   local mappings = vim.api.nvim_get_keymap(mode)
   for _, mapping in ipairs(mappings) do
@@ -65,7 +55,144 @@ local function extract_prefix_name(text)
   end
 end
 
+local function table_length(t)
+  local count = 0
+  for _ in pairs(t) do
+    count = count + 1
+  end
+  return count
+end
+
+--- Obtain function and name
+--- @param lang string
+--- @param ts_node string
+--- @param query_string string
+--- @return table {fn = string, name = string}|{}
+local function get_func_name(lang, ts_node, query_string)
+  if not ts_node then
+    return {}
+  end
+
+  local findings = {}
+  local ts = vim.treesitter
+  local query = ts.query.parse(lang, query_string)
+  for _, matches, _ in query:iter_matches(ts_node, 0) do
+    for id, node in pairs(matches) do
+      if query.captures[id] == "fn" or query.captures[id] == "name" then
+        findings[query.captures[id]] = ts.get_node_text(node, 0)
+      end
+    end
+  end
+  return findings
+end
+
+--- Check for config, view, route, to_route
+--- @param lang string
+--- @param ts_node TSNode
+--- @return table {fn = string, name = string}|nil
+local function check_for_fn(lang, ts_node)
+  local query = [[
+    (function_call_expression
+      function: (name) @fn (#any-of? @fn "config" "view" "route" "to_route")
+      arguments: (arguments
+        (argument
+          (string (string_content) @name)))
+    )
+  ]]
+
+  --- @param node TSNode | nil
+  local node = ts_node
+  while node do
+    if node:type() == "function_call_expression" then
+      if node:parent():type() ~= "argument" then
+        break
+      end
+    end
+
+    node = node:parent()
+  end
+
+  local findings = get_func_name(lang, node, query)
+  if table_length(findings) > 0 then
+    return findings
+  end
+end
+
+--- Check for Route::view or View::make on php filetype
+--- @param lang string
+--- @param node TSNode
+--- @return table {fn = string, name = string}|nil
+local function check_for_scope(lang, node)
+  if vim.bo.filetype ~= "php" then
+    return {}
+  end
+
+  local query_template = [[
+    (scoped_call_expression
+      scope: (name) @fn (#eq? @fn "%s")
+      name: (name) @view (#eq? @view "%s")
+      arguments: (arguments
+        (argument
+          (string
+            (string_content)))?
+        (argument
+          (string
+            (string_content) @name)
+        )
+      )
+    )
+  ]]
+  local views = {
+    { fn = "Route", name = "view" },
+    { fn = "View",  name = "make" },
+  }
+
+  while node do
+    if node:type() == "scoped_call_expression" then
+      break
+    end
+
+    node = node:parent()
+  end
+
+  for _, view in ipairs(views) do
+    local findings = get_func_name(lang, node, query_template:format(view.fn, view.name))
+    if table_length(findings) > 0 then
+      findings.fn = view.fn .. "::" .. view.name
+      return findings
+    end
+  end
+end
+
+local function seek_func()
+  local root, lang = utils.get_root_and_lang()
+  if not root then
+    return
+  end
+
+  local ts_utils = require("nvim-treesitter.ts_utils")
+  local current_node = ts_utils.get_node_at_cursor()
+
+  if not current_node then
+    return
+  end
+  local findings = check_for_scope(lang, current_node)
+  if findings then
+    return findings
+  end
+
+  findings = check_for_fn(lang, current_node)
+  if findings then
+    return findings
+  end
+end
+
 local function find_name(text_input, col)
+  local findings = seek_func()
+  if findings then
+    return findings.fn, findings.name
+  end
+
   local text = text_input:gsub("%s+", " ")
   col = col - (#text_input - #text)
   local start_pos, end_pos = text:find("[,%s>%)]", col)
@@ -271,8 +398,9 @@ local function check_for_filament_support(text)
     "tabs",
   }
 
-  local package_name = text[1]
-  local component_name = text[2]
+  local package_name = text[1]:gsub("[%-.]", "/")
+  local component_name = text[2]:gsub("[%-.]", "/")
+
   if utils.in_table(component_name, support) then
     package_name = package_name .. "/support"
   end
@@ -281,7 +409,7 @@ local function check_for_filament_support(text)
 end
 
 local function package_component(text)
-  text = explode(",", text)
+  text = utils.explode(",", text)
   local package_name, component_name = check_for_filament_support(text)
   return {
     "vendor/" .. package_name .. "/resources/views/components/" .. component_name .. ".blade.php",
@@ -290,21 +418,21 @@ local function package_component(text)
 end
 
 local function get_components_aliases()
-  local ok, obj = pcall(function()
-    return vim
-        .system({
-          "php",
-          "artisan",
-          "blade-nav:components-aliases",
-        }, { text = true })
-        :wait()
-  end)
-
-  if not ok or obj.code ~= 0 then
+  if utils.check_blade_command() == false then
     return {}
   end
 
-  return vim.fn.json_decode(obj.stdout)
+  local result = utils.execute_command_silent({
+    "php",
+    "artisan",
+    "blade-nav:components-aliases",
+  })
+
+  if #result == 0 then
+    return {}
+  end
+
+  return vim.fn.json_decode(result)
 end
 
 local function component_alias(component_name)
@@ -369,7 +497,7 @@ function M.gf()
   local file_that_exists
 
   if vim.fn.filereadable(file_path) == 1 then
-    table.insert(choices, "1. " .. file_path)
+    table.insert(choices, "1: " .. file_path)
     file_that_exists = file_path
   else
     local dir_path = file_path:gsub("%.blade%.php$", "")
@@ -380,7 +508,7 @@ function M.gf()
   end
 
   if vim.fn.filereadable(class_path) == 1 then
-    table.insert(choices, "2. " .. class_path)
+    table.insert(choices, "2: " .. class_path)
     file_that_exists = class_path
   end
 
@@ -399,7 +527,7 @@ function M.gf()
     local component = capitalize(remove_prefix(component_name, prefix))
     if prefix == "x-" and component_name:find("%.") == nil then
       has_options = true
-      table.insert(choices, "1. " .. file_path)
+      table.insert(choices, "1: " .. file_path)
       if component_name:find("%.") == nil then
         table.insert(choices, (#choices + 1) .. ". " .. file_path:gsub("%.blade%.php$", "/index.blade.php"))
       end
@@ -408,7 +536,7 @@ function M.gf()
 
     if string.find(prefix, "livewire") then
       has_options = true
-      table.insert(choices, "1. php artisan make:livewire " .. component:gsub("['()%)]", ""))
+      table.insert(choices, "1: php artisan make:livewire " .. component:gsub("['()%)]", ""))
     end
   end
 
@@ -420,12 +548,21 @@ end
 
 local function create_command()
   vim.api.nvim_create_user_command("BladeNavInstallArtisanCommand", function()
-    local script_path = debug.getinfo(1, "S").source:sub(2)
-    local script_dir = script_path:match("(.*/)")
-    local source = script_dir .. "../../BladeNav.php"
-    local dest = vim.fn.getcwd() .. "/app/Console/Commands/BladeNav.php"
+    local source = utils.get_blade_nav_filename()
+    local root_dir = utils.get_root_dir()
+    local dest = root_dir .. "/app/Console/Commands/BladeNav.php"
+    local src_content, err = utils.read_file(source)
+    if not src_content then
+      print("Error reading file: " .. err)
+      return
+    end
 
-    vim.fn.system({ "cp", source, dest })
+    local dst_content = utils.modify_namespace(src_content, utils.psr4_app())
+    local file, dst_err = utils.write_file(dest, dst_content)
+    if not file then
+      print("Error writing file: " .. dst_err)
+      return
+    end
 
     print("BladeNav.php has been copied to app/Console/Commands/")
   end, {

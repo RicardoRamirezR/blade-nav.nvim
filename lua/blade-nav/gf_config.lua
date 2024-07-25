@@ -2,7 +2,7 @@ local utils = require("blade-nav.utils")
 
 local M = {}
 
-local function goto_subkey(ts, lang, node, keys)
+local function goto_subkey(ts, lang, root_node, keys)
   if #keys == 0 then
     return
   end
@@ -12,11 +12,11 @@ local function goto_subkey(ts, lang, node, keys)
   local query_string = string.format(query_template, key_name)
   local query = ts.query.parse(lang, query_string)
 
-  for _, matches, _ in query:iter_matches(node, 0) do
+  for _, matches, _ in query:iter_matches(root_node, 0) do
     for _, node in pairs(matches) do
       local start_row, start_col, _ = node:start()
       vim.api.nvim_win_set_cursor(0, { start_row + 1, start_col })
-      goto_subkey(ts, lang, node, keys)
+      goto_subkey(ts, lang, node:parent():parent(), keys)
       return
     end
   end
@@ -32,7 +32,10 @@ local function goto_keys(keys)
   local query_template = [[
     (array_element_initializer
       (string (string_content) @y (#eq? @y "%s"))
-      (array_creation_expression)
+      [
+        (array_creation_expression)
+        (string (string_content))
+      ]
     )
   ]]
   local key_name = table.remove(keys, 1)
