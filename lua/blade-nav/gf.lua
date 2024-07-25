@@ -472,7 +472,6 @@ end
 
 function M.gf()
   local prefix, component_name = get_component_and_prefix()
-  print(prefix, component_name)
 
   if not prefix or not component_name then
     return
