@@ -3,12 +3,11 @@ local utils = require("blade-nav.utils")
 local M = {}
 
 local function get_routes(route_name)
-  local result = M.execute_command_silent({
+  local result = utils.execute_command_silent({
     "php",
     "artisan",
     "route:list",
-    "--name=",
-    route_name,
+    "--name=" .. route_name,
     "--json",
     "--columns=name,action",
   })
@@ -97,11 +96,11 @@ M.gf = function(route_name)
     vim.notify("Route definition not found")
     return
   end
-
+  print(vim.inspect(route_map[route_name]))
   local controller = route_map[route_name].controller
   local method = route_map[route_name].method
   local controller_path = resolve_controller_path(controller, psr4_mappings)
-
+  print(vim.inspect(route_map[route_name]))
   if controller_path then
     vim.cmd("edit " .. controller_path)
     goto_method(method)
