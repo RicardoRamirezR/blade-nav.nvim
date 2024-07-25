@@ -87,7 +87,7 @@ local function get_func_name(lang, ts_node, query_string)
 end
 
 --- Check for config, view, route, to_route
---- @param lang string
+--- @param lang string|nil
 --- @param ts_node TSNode
 --- @return table {fn = string, name = string}|nil
 local function check_for_fn(lang, ts_node)
@@ -189,7 +189,7 @@ end
 
 local function find_name(text_input, col)
   local findings = seek_func()
-  if findings then
+  if table_length(findings) > 0 then
     return findings.fn, findings.name
   end
 
@@ -472,6 +472,7 @@ end
 
 function M.gf()
   local prefix, component_name = get_component_and_prefix()
+  print(prefix, component_name)
 
   if not prefix or not component_name then
     return
