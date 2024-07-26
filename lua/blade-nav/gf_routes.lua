@@ -2,42 +2,6 @@ local utils = require("blade-nav.utils")
 
 local M = {}
 
-local function get_routes(route_name)
-  local result = utils.execute_command_silent({
-    "php",
-    "artisan",
-    "route:list",
-    "--name=" .. route_name,
-    "--json",
-    "--columns=name,action",
-  })
-
-  if result:find("Your application doesn't have any routes matching the given criteria") then
-    vim.notify("No matching routes found for the given criteria")
-    return {}
-  end
-
-  local ok, routes = pcall(vim.fn.json_decode, result)
-  if not ok then
-    vim.notify("Error parsing JSON output")
-    return {}
-  end
-
-  local route_map = {}
-
-  for _, route in ipairs(routes) do
-    if route.name and route.action then
-      local controller_method = vim.split(route.action, "@")
-      route_map[route.name] = {
-        controller = controller_method[1],
-        method = controller_method[2],
-      }
-    end
-  end
-
-  return route_map
-end
-
 local function resolve_controller_path(controller, psr4_mappings)
   -- If PSR-4 mappings are empty, assume default namespace
   if not psr4_mappings or vim.tbl_isempty(psr4_mappings) then
@@ -89,7 +53,7 @@ M.gf = function(route_name)
     return
   end
 
-  local route_map = get_routes(route_name)
+  local route_map = utils.get_routes(route_name)
   local psr4_mappings = utils.get_psr4_mappings()
 
   if not route_map[route_name] then

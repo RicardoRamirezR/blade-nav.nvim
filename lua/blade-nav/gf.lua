@@ -582,6 +582,27 @@ local function create_command()
   })
 end
 
+local function create_command_times()
+  vim.api.nvim_create_user_command("BladeElapsedTimes", function()
+    local function measure_time(func, func_name, ...)
+      local start_time = os.clock()              -- Get the start time
+      func(...)                                  -- Call the function with any arguments passed
+      local end_time = os.clock()                -- Get the end time
+      local elapsed_time = end_time - start_time -- Calculate elapsed time
+      print(string.format("Elapsed time: %.4f seconds on %s", elapsed_time, func_name))
+    end
+
+    measure_time(utils.check_blade_command, "check_blade_command")
+    measure_time(get_components_aliases, "get_components_aliases")
+    measure_time(utils.get_blade_files, "get_blade_files")
+    measure_time(utils.get_root_dir, "get_root_dir")
+    measure_time(utils.get_route_names, "get_route_names")
+    measure_time(utils.get_routes, "get_routes", "")
+  end, {
+    desc = "Measure elapsed times for external commands",
+  })
+end
+
 M.setup = function()
   if registered then
     return
@@ -597,6 +618,7 @@ M.setup = function()
   end, { noremap = true, silent = true, desc = "BladeNav: Open file under cursor" })
 
   create_command()
+  create_command_times()
 end
 
 return M

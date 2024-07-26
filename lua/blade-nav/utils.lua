@@ -26,7 +26,6 @@ end
 --- Executes system command without noice
 --- @param cmd table|string
 --- @return string
---- @usage local result = execute_command_silent('ls')
 M.execute_command_silent = function(cmd)
   if type(cmd) == "string" then
     cmd = M.explode(" ", cmd)
@@ -168,6 +167,45 @@ M.in_table = function(needle, table)
   end
 
   return false
+end
+
+--- Get routes
+--- @param route_name string
+--- @return table
+M.get_routes = function(route_name)
+  local result = M.execute_command_silent({
+    "php",
+    "artisan",
+    "route:list",
+    "--name=" .. route_name,
+    "--json",
+    "--columns=name,action",
+  })
+
+  if result:find("Your application doesn't have any routes matching the given criteria") then
+    vim.notify("No matching routes found for the given criteria")
+    return {}
+  end
+
+  local ok, routes = pcall(vim.fn.json_decode, result)
+  if not ok then
+    vim.notify("Error parsing JSON output")
+    return {}
+  end
+
+  local route_map = {}
+
+  for _, route in ipairs(routes) do
+    if route.name and route.action then
+      local controller_method = vim.split(route.action, "@")
+      route_map[route.name] = {
+        controller = controller_method[1],
+        method = controller_method[2],
+      }
+    end
+  end
+
+  return route_map
 end
 
 --- Get all route names
