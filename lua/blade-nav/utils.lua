@@ -25,14 +25,15 @@ end
 
 --- Executes system command without noice
 --- @param cmd table|string
---- @return string
+--- @return string,boolean
 M.execute_command_silent = function(cmd)
   if type(cmd) == "string" then
     cmd = M.explode(" ", cmd)
   end
 
   if not M.command_exists(cmd[1]) then
-    return ""
+    print("Command not found: " .. cmd[1])
+    return "", false
   end
 
   local ok, obj = pcall(function()
@@ -40,10 +41,10 @@ M.execute_command_silent = function(cmd)
   end)
 
   if not ok or obj.code ~= 0 then
-    return ""
+    return "", false
   end
 
-  return obj.stdout
+  return obj.stdout, true
 end
 
 --- find files using `fd` or `find`
@@ -181,6 +182,10 @@ M.get_routes = function(route_name)
     "--json",
     "--columns=name,action",
   })
+
+  if #result == 0 then
+    return {}
+  end
 
   if result:find("Your application doesn't have any routes matching the given criteria") then
     vim.notify("No matching routes found for the given criteria")
@@ -463,10 +468,26 @@ M.get_blade_nav_filename = function()
 end
 
 --- Get the root directory
---- @return string
+--- @return string, boolean
 M.get_root_dir = function()
+  local found = true
   local root_dir = M.execute_command_silent("git rev-parse --show-toplevel"):gsub("[\r\n]", "")
-  return root_dir
+  if root_dir == "" then
+    found = false
+    root_dir = vim.fn.getcwd()
+  end
+  return root_dir, found
+end
+
+--- Convert kebab-case to PascalCase
+--- @param input string
+--- @return string
+M.kebab_to_pascal = function(input)
+  local result = input:gsub("(%-)(%w)", function(_, letter)
+    return letter:upper()
+  end)
+  local text = result:gsub("^%l", string.upper)
+  return text
 end
 
 return M

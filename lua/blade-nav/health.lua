@@ -57,12 +57,6 @@ local function check_setup()
   local find = utils.command_exists("find")
   local php = utils.command_exists("php")
 
-  if jit then
-    print("Operating System: " .. jit.os)
-  else
-    print("jit is not available")
-  end
-
   ok("Operating System: " .. vim.loop.os_uname().sysname)
 
   if find then
@@ -112,8 +106,8 @@ local function check_setup()
     error("Missing vendor/composer/autoload_psr4.php")
   end
 
-  local root_dir = utils.get_root_dir()
-  if root_dir and root_dir ~= "" then
+  local root_dir, ok = utils.get_root_dir()
+  if ok and root_dir and root_dir ~= "" then
     ok("Git repository found")
   else
     warn("Git repository not found")

@@ -101,7 +101,7 @@ local function check_for_fn(lang, ts_node)
     )
   ]]
 
-  --- @type ts_node TSNode | nil
+  --- @type TSNode | nil
   local node = ts_node
   while node do
     if node:type() == "function_call_expression" then
@@ -261,13 +261,13 @@ local function has_telescope()
 end
 
 local function excec_action(selection)
-  local selected = selection:gsub("^%d+%.%s*", "")
+  local selected = selection:gsub("^%d+[%:%.]%s*", "")
   if selected:find("artisan") then
-    local success, errorMsg = os.execute(selected)
-    if success then
+    local _, ok = utils.execute_command_silent(selected)
+    if ok then
       print("\nCommand executed successfully")
     else
-      print("\nError executing command:", errorMsg)
+      print("\nError executing command")
     end
   else
     vim.cmd("edit " .. selected)
@@ -381,7 +381,7 @@ local function livewire_component(component_name)
   component_name = component_name:gsub("['()%)]", "")
   return {
     "resources/views/livewire/" .. component_name .. ".blade.php",
-    "app/Http/Livewire/" .. capitalize(component_name) .. ".php",
+    "app/Http/Livewire/" .. utils.kebab_to_pascal(component_name) .. ".php",
   }
 end
 
@@ -520,6 +520,12 @@ function M.gf()
   if vim.fn.filereadable(class_path) == 1 then
     table.insert(choices, "2: " .. class_path)
     file_that_exists = class_path
+  else
+    class_path = class_path:gsub("app/Http/Livewire", "app/Livewire")
+    if vim.fn.filereadable(class_path) == 1 then
+      table.insert(choices, "2: " .. class_path)
+      file_that_exists = class_path
+    end
   end
 
   if #choices == 1 then
@@ -539,9 +545,9 @@ function M.gf()
       has_options = true
       table.insert(choices, "1: " .. file_path)
       if component_name:find("%.") == nil then
-        table.insert(choices, (#choices + 1) .. ". " .. file_path:gsub("%.blade%.php$", "/index.blade.php"))
+        table.insert(choices, (#choices + 1) .. ": " .. file_path:gsub("%.blade%.php$", "/index.blade.php"))
       end
-      table.insert(choices, (#choices + 1) .. ". php artisan make:component " .. component)
+      table.insert(choices, (#choices + 1) .. ": php artisan make:component " .. component)
     end
 
     if string.find(prefix, "livewire") then
@@ -567,7 +573,7 @@ local function create_command()
       return
     end
 
-    vim.fn.mkdir(dest_dir, "p")
+    vim.fn.mkdir(dest_dir:gsub("/BladeNav.php$", ""), "p")
 
     local dst_content = utils.modify_namespace(src_content, utils.psr4_app())
     local file, dst_err = utils.write_file(dest_dir, dst_content)
