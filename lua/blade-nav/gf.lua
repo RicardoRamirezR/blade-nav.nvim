@@ -589,7 +589,7 @@ local function create_command()
 end
 
 local function create_command_times()
-  vim.api.nvim_create_user_command("BladeElapsedTimes", function()
+  vim.api.nvim_create_user_command("BladeNavElapsedTimes", function()
     local function measure_time(func, func_name, ...)
       local start_time = os.clock()              -- Get the start time
       func(...)                                  -- Call the function with any arguments passed
