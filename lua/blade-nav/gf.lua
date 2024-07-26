@@ -83,13 +83,14 @@ local function get_func_name(lang, ts_node, query_string)
       end
     end
   end
+
   return findings
 end
 
 --- Check for config, view, route, to_route
---- @param lang string|nil
+--- @param lang string
 --- @param ts_node TSNode
---- @return table {fn = string, name = string}|nil
+--- @return table {fn = string, name = string}
 local function check_for_fn(lang, ts_node)
   local query = [[
     (function_call_expression
@@ -100,7 +101,7 @@ local function check_for_fn(lang, ts_node)
     )
   ]]
 
-  --- @param node TSNode | nil
+  --- @type ts_node TSNode | nil
   local node = ts_node
   while node do
     if node:type() == "function_call_expression" then
@@ -112,16 +113,17 @@ local function check_for_fn(lang, ts_node)
     node = node:parent()
   end
 
-  local findings = get_func_name(lang, node, query)
-  if table_length(findings) > 0 then
-    return findings
+  if not node then
+    return {}
   end
+
+  return get_func_name(lang, node, query)
 end
 
 --- Check for Route::view or View::make on php filetype
 --- @param lang string
 --- @param node TSNode
---- @return table {fn = string, name = string}|nil
+--- @return table {fn = string, name = string}
 local function check_for_scope(lang, node)
   if vim.bo.filetype ~= "php" then
     return {}
@@ -155,36 +157,44 @@ local function check_for_scope(lang, node)
     node = node:parent()
   end
 
+  if not node then
+    return {}
+  end
+
+  local findings = {}
   for _, view in ipairs(views) do
-    local findings = get_func_name(lang, node, query_template:format(view.fn, view.name))
+    findings = get_func_name(lang, node, query_template:format(view.fn, view.name))
     if table_length(findings) > 0 then
       findings.fn = view.fn .. "::" .. view.name
-      return findings
+      break
     end
   end
+
+  return findings
 end
 
+--- Find the function and name
+--- comment
+--- @return table
 local function seek_func()
   local root, lang = utils.get_root_and_lang()
-  if not root then
-    return
+  if not root or not lang then
+    return {}
   end
 
   local ts_utils = require("nvim-treesitter.ts_utils")
   local current_node = ts_utils.get_node_at_cursor()
 
   if not current_node then
-    return
+    return {}
   end
+
   local findings = check_for_scope(lang, current_node)
-  if findings then
+  if table_length(findings) > 0 then
     return findings
   end
 
-  findings = check_for_fn(lang, current_node)
-  if findings then
-    return findings
-  end
+  return check_for_fn(lang, current_node)
 end
 
 local function find_name(text_input, col)
@@ -550,15 +560,17 @@ local function create_command()
   vim.api.nvim_create_user_command("BladeNavInstallArtisanCommand", function()
     local source = utils.get_blade_nav_filename()
     local root_dir = utils.get_root_dir()
-    local dest = root_dir .. "/app/Console/Commands/BladeNav.php"
+    local dest_dir = root_dir .. "/app/Console/Commands/BladeNav.php"
     local src_content, err = utils.read_file(source)
     if not src_content then
       print("Error reading file: " .. err)
       return
     end
 
+    vim.fn.mkdir(dest_dir, "p")
+
     local dst_content = utils.modify_namespace(src_content, utils.psr4_app())
-    local file, dst_err = utils.write_file(dest, dst_content)
+    local file, dst_err = utils.write_file(dest_dir, dst_content)
     if not file then
       print("Error writing file: " .. dst_err)
       return

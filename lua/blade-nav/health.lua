@@ -6,7 +6,6 @@ local start = vim.health.start or vim.health.report_start
 local ok = vim.health.ok or vim.health.report_ok
 local warn = vim.health.warn or vim.health.report_warn
 local error = vim.health.error or vim.health.report_error
-local info = vim.health.info or vim.health.report_info
 
 --- Check if BladeNav.php has been modified
 local function blade_command_sync()
@@ -58,12 +57,13 @@ local function check_setup()
   local find = utils.command_exists("find")
   local php = utils.command_exists("php")
 
-  if fd then
-    local version = utils.explode("\n", vim.fn.system("fd --version"))
-    ok(version[1])
+  if jit then
+    print("Operating System: " .. jit.os)
   else
-    warn("fd does not exist")
+    print("jit is not available")
   end
+
+  ok("Operating System: " .. vim.loop.os_uname().sysname)
 
   if find then
     if not fd then
@@ -74,9 +74,19 @@ local function check_setup()
   if php then
     local version = utils.explode("\n", vim.fn.system("php --version"))
     ok(version[1])
-    check_blade_command()
   else
     error("Command PHP does not exist")
+  end
+
+  if php then
+    local version = utils.explode("\n", vim.fn.system("php artisan --version"))
+    ok(version[1])
+  else
+    error("Artisan command not found")
+  end
+
+  if php then
+    check_blade_command()
   end
 
   local f = io.open("composer.json", "r")
