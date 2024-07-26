@@ -375,19 +375,8 @@ end
 --- Check if a BladeNavInstallArtisanCommand command exists
 --- @return boolean
 M.check_blade_command = function()
-  local result = M.execute_command_silent({ "php", "artisan", "--format=json" })
-  if result == "" then
-    return false
-  end
-
-  result = vim.fn.json_decode(result)
-  for _, command in ipairs(result.commands) do
-    if command.name == "blade-nav:components-aliases" then
-      return true
-    end
-  end
-
-  return false
+  local root_dir = M.get_root_dir()
+  return vim.fn.filereadable(root_dir .. "/app/Console/Commands/BladeNav.php") == 1
 end
 
 --- Get PSR-4 mappings

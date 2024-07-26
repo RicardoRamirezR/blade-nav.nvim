@@ -496,7 +496,7 @@ function M.gf()
     end
   end
 
-  if component_alias(component_name) then
+  if prefix == "x-" and component_alias(component_name) then
     return
   end
 
@@ -520,7 +520,7 @@ function M.gf()
   if vim.fn.filereadable(class_path) == 1 then
     table.insert(choices, "2: " .. class_path)
     file_that_exists = class_path
-  else
+  elseif prefix == "livewire" and class_path then
     class_path = class_path:gsub("app/Http/Livewire", "app/Livewire")
     if vim.fn.filereadable(class_path) == 1 then
       table.insert(choices, "2: " .. class_path)
@@ -589,7 +589,7 @@ local function create_command()
 end
 
 local function create_command_times()
-  vim.api.nvim_create_user_command("BladeElapsedTimes", function()
+  vim.api.nvim_create_user_command("BladeNavElapsedTimes", function()
     local function measure_time(func, func_name, ...)
       local start_time = os.clock()              -- Get the start time
       func(...)                                  -- Call the function with any arguments passed
