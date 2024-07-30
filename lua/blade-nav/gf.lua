@@ -6,6 +6,10 @@ local rhs
 
 local registered = false
 
+--- Get keymap rhs
+--- @param mode string
+--- @param lhs string
+--- @return string|nil
 local function get_keymap_rhs(mode, lhs)
   local mappings = vim.api.nvim_get_keymap(mode)
   for _, mapping in ipairs(mappings) do
@@ -17,7 +21,9 @@ local function get_keymap_rhs(mode, lhs)
   return nil
 end
 
-local function exec_native_gf()
+--- Run native gf
+--- @return nil
+local function gf_native()
   if rhs then
     rhs = rhs:gsub("<[cC][fF][iI][lL][eE]>", M.cfile)
     rhs = rhs:gsub("<[cC][rR]>", "")
@@ -27,6 +33,9 @@ local function exec_native_gf()
   end
 end
 
+--- Extract prefix and name
+--- @param text string
+--- @return string|nil, string|nil
 local function extract_prefix_name(text)
   local patterns = {
     "(%S+)%s*%(%s*['\"]([%w%.%-%_]+)['\"]%s*,%s*['\"]([%w%.%-%_]+)['\"]%s*%)",
@@ -53,46 +62,38 @@ local function extract_prefix_name(text)
       return name, param1
     end
   end
+
+  return nil, nil
 end
 
-local function table_length(t)
-  local count = 0
-  for _ in pairs(t) do
-    count = count + 1
-  end
-  return count
-end
-
---- Obtain function and name
---- @param lang string
---- @param ts_node string
---- @param query_string string
---- @return table {fn = string, name = string}|{}
-local function get_func_name(lang, ts_node, query_string)
-  if not ts_node then
-    return {}
-  end
-
-  local findings = {}
-  local ts = vim.treesitter
-  local query = ts.query.parse(lang, query_string)
-  for _, matches, _ in query:iter_matches(ts_node, 0) do
-    for id, node in pairs(matches) do
-      if query.captures[id] == "fn" or query.captures[id] == "name" then
-        findings[query.captures[id]] = ts.get_node_text(node, 0)
-      end
-    end
-  end
-
-  return findings
-end
-
---- Check for config, view, route, to_route
+--- Obtain function and name in a treesitter tree
 --- @param lang string
 --- @param ts_node TSNode
---- @return table {fn = string, name = string}
-local function check_for_fn(lang, ts_node)
-  local query = [[
+--- @param query_string string
+--- @param content? string|number
+--- @return table,boolean {fn = string, name = string}|{},true|false
+local function find_fn_and_name(lang, ts_node, query_string, content)
+  if not ts_node then
+    return {}, false
+  end
+
+  content = content or 0
+  local ts = vim.treesitter
+  local findings = { fn = nil, name = nil }
+  local query = ts.query.parse(lang, query_string)
+
+  for _, matches, _ in query:iter_matches(ts_node, content) do
+    findings.fn = ts.get_node_text(matches[1], content)
+    findings.name = ts.get_node_text(matches[2], content)
+  end
+
+  return findings, findings.fn ~= nil
+end
+
+--- Query string for function
+--- @return string
+local function query_string_for_function()
+  return [[
     (function_call_expression
       function: (name) @fn (#any-of? @fn "config" "view" "route" "to_route")
       arguments: (arguments
@@ -100,7 +101,13 @@ local function check_for_fn(lang, ts_node)
           (string (string_content) @name)))
     )
   ]]
+end
 
+--- Check for config, view, route, to_route
+--- @param lang string
+--- @param ts_node TSNode
+--- @return table,boolean {fn = string, name = string},true|false
+local function check_for_fn(lang, ts_node)
   --- @type TSNode | nil
   local node = ts_node
   while node do
@@ -114,20 +121,22 @@ local function check_for_fn(lang, ts_node)
   end
 
   if not node then
-    return {}
+    return {}, false
   end
 
-  return get_func_name(lang, node, query)
+  return find_fn_and_name(lang, node, query_string_for_function())
 end
 
 --- Check for Route::view or View::make on php filetype
 --- @param lang string
---- @param node TSNode
---- @return table {fn = string, name = string}
-local function check_for_scope(lang, node)
+--- @param ts_node TSNode
+--- @return table,boolean {fn = string, name = string},true|false
+local function check_for_scope(lang, ts_node)
   if vim.bo.filetype ~= "php" then
-    return {}
+    return {}, false
   end
+  --- @type TSNode | nil
+  local node = ts_node
 
   local query_template = [[
     (scoped_call_expression
@@ -158,48 +167,85 @@ local function check_for_scope(lang, node)
   end
 
   if not node then
-    return {}
+    return {}, false
   end
 
-  local findings = {}
   for _, view in ipairs(views) do
-    findings = get_func_name(lang, node, query_template:format(view.fn, view.name))
-    if table_length(findings) > 0 then
+    local findings, ok = find_fn_and_name(lang, node, query_template:format(view.fn, view.name))
+    if ok then
       findings.fn = view.fn .. "::" .. view.name
-      break
+      return findings, true
     end
   end
 
-  return findings
+  return {}, false
+end
+
+--- Function to parse a string with a specific language
+--- @param lang string
+--- @param content string
+--- @return TSNode
+local function parse_string(lang, content)
+  local ts = vim.treesitter
+  local parser = ts.get_string_parser(content, lang)
+  local tree = parser:parse()[1]
+  return tree:root()
+end
+
+--- Check for config, view, route, to_route in blade view
+--- @param lang string
+--- @param root TSNode
+--- @return table,boolean {fn = string, name = string}|{},truse|false
+local function check_in_blade(lang, root)
+  if root:type() ~= "php_only" then
+    return {}, false
+  end
+
+  lang = "php"
+
+  local ts = vim.treesitter
+  local content = "<?php\n" .. ts.get_node_text(root, 0)
+  local ts_node = parse_string(lang, content)
+
+  return find_fn_and_name(lang, ts_node, query_string_for_function(), content)
 end
 
 --- Find the function and name
---- comment
---- @return table
-local function seek_func()
+--- @return table, boolean {fn = string, name = string}|{},true if found
+local function seek_for_function_and_name()
   local root, lang = utils.get_root_and_lang()
   if not root or not lang then
-    return {}
+    return {}, false
   end
 
   local ts_utils = require("nvim-treesitter.ts_utils")
-  local current_node = ts_utils.get_node_at_cursor()
+  local current_node = ts_utils.get_node_at_cursor(0, true)
 
   if not current_node then
-    return {}
+    return {}, false
   end
 
-  local findings = check_for_scope(lang, current_node)
-  if table_length(findings) > 0 then
-    return findings
+  local findings, ok = check_in_blade(lang, current_node)
+  if ok then
+    return findings, true
+  end
+
+  findings, ok = check_for_scope(lang, current_node)
+  if ok then
+    return findings, true
   end
 
   return check_for_fn(lang, current_node)
 end
 
+--- Find the function and name
+--- @param text_input string
+--- @param col number
+--- @return table, boolean {fn = string, name = string}|{}, true if found
 local function find_name(text_input, col)
-  local findings = seek_func()
-  if table_length(findings) > 0 then
+  local findings, ok = seek_for_function_and_name()
+
+  if ok then
     return findings.fn, findings.name
   end
 
@@ -347,7 +393,10 @@ local function capitalize(name)
   end)
 end
 
-local function get_component_and_prefix()
+--- Get component name and prefix from the current cursor position
+--- @return string|nil prefix
+--- @return string|nil component_name
+local function get_component_name_and_prefix()
   local _, col = unpack(vim.api.nvim_win_get_cursor(0))
   local line = vim.api.nvim_get_current_line()
 
@@ -357,8 +406,6 @@ local function get_component_and_prefix()
   local prefix, gf_dest = find_name(line, col)
   if gf_dest then
     return prefix, gf_dest
-  else
-    print("No component name found")
   end
 end
 
@@ -427,6 +474,8 @@ local function package_component(text)
   }
 end
 
+--- Get components aliases from blade-nav artisan command
+--- @return table
 local function get_components_aliases()
   if utils.check_blade_command() == false then
     return {}
@@ -445,6 +494,9 @@ local function get_components_aliases()
   return vim.fn.json_decode(result)
 end
 
+--- Check if component alias exists include filament support
+--- @param component_name string
+--- @return boolean|nil true if component alias exists
 local function component_alias(component_name)
   local components_aliases = get_components_aliases()
   local filename = components_aliases[component_name]
@@ -480,26 +532,27 @@ local function gf_module(prefix)
   end
 end
 
-function M.gf()
-  local prefix, component_name = get_component_and_prefix()
-
-  if not prefix or not component_name then
-    return
-  end
-
+--- Go to file for view, config, route
+--- @param prefix string
+--- @param component_name string
+--- @return boolean|nil true if gf was successful
+local function gf_by_module(prefix, component_name)
   local fn = gf_module(prefix)
   if fn then
     local module = package.loaded[fn] or require(fn)
 
     if module and type(module.gf) == "function" then
-      return pcall(module.gf, component_name)
+      pcall(module.gf, component_name)
+      return true
     end
   end
+end
 
-  if prefix == "x-" and component_alias(component_name) then
-    return
-  end
-
+--- Go to file or class for <x-*>|@include|@extends|@livewire|<livewire:*>
+--- @param prefix string
+--- @param component_name string
+--- @return boolean|nil true if gf was successful
+local function gf_file_or_class(prefix, component_name)
   component_name = string.gsub(component_name, "%.", "/")
 
   local file_path, class_path = unpack(get_paths(prefix, component_name))
@@ -562,6 +615,28 @@ function M.gf()
   end
 end
 
+function M.gf()
+  local prefix, component_name = get_component_name_and_prefix()
+
+  if not prefix or not component_name then
+    return gf_native()
+  end
+
+  if gf_by_module(prefix, component_name) then
+    return
+  end
+
+  if prefix == "x-" and component_alias(component_name) then
+    return
+  end
+
+  if gf_file_or_class(prefix, component_name) then
+    return
+  end
+
+  gf_native()
+end
+
 local function create_command()
   vim.api.nvim_create_user_command("BladeNavInstallArtisanCommand", function()
     local source = utils.get_blade_nav_filename()
@@ -591,10 +666,10 @@ end
 local function create_command_times()
   vim.api.nvim_create_user_command("BladeNavElapsedTimes", function()
     local function measure_time(func, func_name, ...)
-      local start_time = os.clock()              -- Get the start time
-      func(...)                                  -- Call the function with any arguments passed
-      local end_time = os.clock()                -- Get the end time
-      local elapsed_time = end_time - start_time -- Calculate elapsed time
+      local start_time = os.clock()
+      func(...)
+      local end_time = os.clock()
+      local elapsed_time = end_time - start_time
       print(string.format("Elapsed time: %.4f seconds on %s", elapsed_time, func_name))
     end
 

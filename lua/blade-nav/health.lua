@@ -48,7 +48,9 @@ local function check_blade_command()
   end
 
   warn(
-    "Blade command components-aliases not found\n" .. "to install it run the Ex command BladeNavInstallArtisanCommand"
+    "Blade command components-aliases not found.\n"
+    .. "The command is needed to access packages with blade components,\n"
+    .. "to install it run the Ex command BladeNavInstallArtisanCommand"
   )
 end
 
@@ -106,8 +108,8 @@ local function check_setup()
     error("Missing vendor/composer/autoload_psr4.php")
   end
 
-  local root_dir, ok = utils.get_root_dir()
-  if ok and root_dir and root_dir ~= "" then
+  local root_dir, is_ok = utils.get_root_dir()
+  if is_ok and root_dir and root_dir ~= "" then
     ok("Git repository found")
   else
     warn("Git repository not found")

@@ -21,7 +21,7 @@ end
 
 local function goto_method(method_name)
   local root, lang = utils.get_root_and_lang()
-  if not root then
+  if not root or not lang then
     return
   end
 
@@ -29,13 +29,13 @@ local function goto_method(method_name)
     method_name = "__invoke"
   end
 
-  local ts = vim.treesitter
   local query_template = [[
     (method_declaration
       (visibility_modifier) @vis (#eq? @vis "public")
         name: (name) @name (#eq? @name "%s")
     ) @method
   ]]
+  local ts = vim.treesitter
   local query_string = string.format(query_template, method_name)
   local query = ts.query.parse(lang, query_string)
 
@@ -60,11 +60,10 @@ M.gf = function(route_name)
     vim.notify("Route definition not found")
     return
   end
-  print(vim.inspect(route_map[route_name]))
+
   local controller = route_map[route_name].controller
   local method = route_map[route_name].method
   local controller_path = resolve_controller_path(controller, psr4_mappings)
-  print(vim.inspect(route_map[route_name]))
   if controller_path then
     vim.cmd("edit " .. controller_path)
     goto_method(method)

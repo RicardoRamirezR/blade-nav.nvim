@@ -24,7 +24,7 @@ end
 
 local function goto_keys(keys)
   local root, lang = utils.get_root_and_lang()
-  if not root then
+  if not root or not lang then
     return
   end
 

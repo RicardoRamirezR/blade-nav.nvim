@@ -1,10 +1,10 @@
 # blade-nav.nvim
-Navigating Blade views, routes and configs within Laravel projects
+Navigating Blade views, components, routes and configs within Laravel projects
 
 `blade-nav.nvim` is a Neovim plugin designed to enhance navigation within 
-Laravel projects. It allows quick access to Blade files and their corresponding
-classes, and enables navigation to the controller associated with a route name.
-An as a bonous to configuration files.
+Laravel projects. It allows quick access to Blade views and their corresponding
+classes, enables navigation to the controller associated with a route name, and
+to configuration files.
 This plugin simplifies moving between controllers, routes, configuration files,
 Blade views, and components in Laravel applications.
 
@@ -14,7 +14,7 @@ Blade views, and components in Laravel applications.
   </a>
 </p>
 
-## In a Blade file
+## In a Blade view
 
 ![x-livewire](https://github.com/RicardoRamirezR/blade-nav.nvim/assets/6526545/8e10106f-d28e-40dc-b0df-c45f0f842980)
 
@@ -30,11 +30,11 @@ Blade views, and components in Laravel applications.
 
 ## Navigation
 
-### From Blade Files
+### From Blade View
 
 - Navigate to the parent view using `@extends('name')`
 - Navigate to included views using `@include('name')`
-- Open Laravel components using `<x-name />`
+- Open Blade components using `<x-name />`
 - Open Livewire components using `<livewire:name />` or `@livewire('name')`
 
 ### From Controllers and Routes:
@@ -45,7 +45,7 @@ Open Blade views from controller or route definitions like
 - `view('name')`
 
 ### From any PHP or Blade file:
-- Open the controller associated with the route name: `route('name')`
+- Open the controller associated with the route name: `route('name')` or `to_route('name')`
 - Open configuration files using `config('file.key')`
 
 ## Features
@@ -55,6 +55,8 @@ Open Blade views from controller or route definitions like
   (requires installation and configuration) for component selection.
 - Provides a custom source for [coq](https://github.com/ms-jpq/coq_nvim) (requires
   installation and configuration).
+- Has support for Livewire components v2 and v3.
+- Has support for Filament components.
 
 ## Installation
 
@@ -88,14 +90,7 @@ use {
 
 ## Usage
 
-1. **To navigate to a Blade file or its corresponding class**:
-   
-    If the file does not exist and is in a subfolder that does not exist yet,
-    you should create the directory, it can be done writing the file using `++p`  
-
-    > The "++p" flag creates the parent directory of the file if it does not exist.
-    > For example if you edit "foo/bar/file.txt", the ":write ++p" command creates
-    >"foo/bar/" if necessary before writing the file.
+1. **To navigate to a Blade view or its corresponding class**:
 
   - Place the cursor over the file name and use the `gf` command.
     - If the component view exists but there is no corresponding class, it 
@@ -108,6 +103,10 @@ use {
     component and cretate the component via `php artisan make:component`. A
     third option will be presented if you want to create an Anonymous Index Component.
 
+    > If the file does not exist and is in a subfolder that does not exist yet,
+    > you should create the directory, it can be done writing the file using 
+    > [`++p`](https://neovim.io/doc/user/editing.html#%3Awrite)
+
 2. **To navigate to a controller associated with a route name**:
     - Place the cursor over the route name and use the `gf` command.
 
@@ -116,39 +115,35 @@ use {
 
 4. **Select an existing resource using the custom source**, write either:
   - in a Blade file:
-    - `@extends`
-    - `@include`
+    - `@extends('`
+    - `@include('`
     - `<x-`
-    - `<livewire`
-    - `@livewire`
+    - `<livewire:`
+    - `@livewire('`
 
   - in a Controller or Route:
-    - `Route::view('url', 'name')`
-    - `View::make('name')`
-    - `view('name')`
+    - `Route::view('`
+    - `View::make('`
+    - `view('`
 
-  - in any PHP or Blade file (coq only):
+  - in any PHP or Blade file:
     - `route('`
+    - `to_route('`
 
     And the list of files will appear, and with the magic of completion the
-    list if filtered while you write. For coq, `coq_settings.match.max_results`
-    limits the result shown.
+    list if filtered while you write. 
     
 ## Configuration
 
 No additional configuration is required. The plugin works out-of-the-box with the default `gf` command.
 
-## Example
+For [cmd](https://github.com/hrsh7th/nvim-cmp) you should install the plugin.
 
-To navigate from a controller to a Blade view:
-```php
-public function show()
-{
-    return view('welcome');
-}
-```
+For [coq](https://github.com/ms-jpq/coq_nvim), you should install the plugin,
+`coq_settings.match.max_results` limits the result shown.
 
-Place the cursor on 'welcome' and press `gf` to open the resources/views/welcome.blade.php file.
+For packages that has Blade components, you should run the Ex command
+`BladeNavInstallArtisanCommand` to install the artisan command.
 
 ## Contributing
 

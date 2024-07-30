@@ -350,14 +350,12 @@ M.get_root_and_lang = function()
   local parser = parsers.get_parser()
 
   if not parser then
-    vim.notify("Failed to parse the tree.", vim.log.levels.ERROR)
     return nil, nil
   end
 
   local tree = parser:parse()[1]
 
   if not tree then
-    vim.notify("Failed to parse the tree.", vim.log.levels.ERROR)
     return nil, nil
   end
 
