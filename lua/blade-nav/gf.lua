@@ -2,32 +2,29 @@
 local utils = require("blade-nav.utils")
 
 local M = {}
-local rhs
+local gf_mapping
 
 local registered = false
 
---- Get keymap rhs
+--- Get keymap
 --- @param mode string
 --- @param lhs string
---- @return string|nil
-local function get_keymap_rhs(mode, lhs)
-  local mappings = vim.api.nvim_get_keymap(mode)
-  for _, mapping in ipairs(mappings) do
-    if mapping.lhs == lhs then
-      return mapping.rhs:gsub("<[lL][tT]>", "<")
+--- @return vim.api.keyset.keymap|nil
+local function get_keymap(mode, lhs)
+  local keymaps = vim.api.nvim_get_keymap(mode)
+  for _, keymap in ipairs(keymaps) do
+    if keymap.lhs == lhs then
+      return keymap
     end
   end
-
-  return nil
 end
 
 --- Run native gf
 --- @return nil
 local function gf_native()
-  if rhs then
-    rhs = rhs:gsub("<[cC][fF][iI][lL][eE]>", M.cfile)
-    rhs = rhs:gsub("<[cC][rR]>", "")
-    vim.cmd(rhs)
+  if gf_mapping then
+    local rhs = vim.api.nvim_replace_termcodes(gf_mapping.rhs, true, true, true)
+    vim.api.nvim_feedkeys(rhs, "n", false)
   else
     vim.fn.execute("normal! gf")
   end
@@ -634,6 +631,7 @@ function M.gf()
     return
   end
 
+  print("gf: 636")
   gf_native()
 end
 
@@ -691,12 +689,17 @@ M.setup = function()
 
   registered = true
 
-  rhs = get_keymap_rhs("n", "gf")
+  gf_mapping = get_keymap("n", "gf")
 
-  vim.keymap.set("n", "gf", function()
-    M.cfile = vim.fn.expand("<cfile>")
-    M.gf()
-  end, { noremap = true, silent = true, desc = "BladeNav: Open file under cursor" })
+  vim.api.nvim_create_autocmd("FileType", {
+    group = vim.api.nvim_create_augroup("blade-nav-filetype-detection", { clear = true }),
+    pattern = { "blade", "php" },
+    callback = function()
+      vim.keymap.set("n", "gf", function()
+        M.gf()
+      end, { buffer = true, noremap = true, silent = true, desc = "BladeNav: Open file under cursor" })
+    end,
+  })
 
   create_command()
   create_command_times()

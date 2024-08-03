@@ -145,6 +145,10 @@ For [coq](https://github.com/ms-jpq/coq_nvim), you should install the plugin,
 For packages that has Blade components, you should run the Ex command
 `BladeNavInstallArtisanCommand` to install the artisan command.
 
+## Health
+
+To check the health of the plugin, run `:checkhealth blade-nav`.
+
 ## Contributing
 
 Feel free to submit issues or pull requests to enhance the functionality of this plugin.
