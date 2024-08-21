@@ -58,7 +58,10 @@ local function check_setup()
   local fd = utils.command_exists("fd")
   local find = utils.command_exists("find")
   local php = utils.command_exists("php")
+  local version = vim.version()
+  local neovim_version = string.format("%d.%d.%d", version.major, version.minor, version.patch)
 
+  ok("Neovim version: " .. neovim_version)
   ok("Operating System: " .. vim.loop.os_uname().sysname)
 
   if find then

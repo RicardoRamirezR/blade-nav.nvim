@@ -631,7 +631,6 @@ function M.gf()
     return
   end
 
-  print("gf: 636")
   gf_native()
 end
 

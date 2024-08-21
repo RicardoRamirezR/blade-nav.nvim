@@ -347,6 +347,10 @@ end
 --- @return table|nil, string|nil
 M.get_root_and_lang = function()
   local parsers = require("nvim-treesitter.parsers")
+  if not parsers then
+    return nil, nil
+  end
+
   local parser = parsers.get_parser()
 
   if not parser then
