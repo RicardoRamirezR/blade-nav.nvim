@@ -117,6 +117,17 @@ local function check_setup()
   else
     warn("Git repository not found")
   end
+
+  if vim.g.blade_nav and vim.g.blade_nav.laravel_componets then
+    local s_or_not = #vim.g.blade_nav.laravel_componets > 1 and "s" or ""
+    ok(
+      "Additional search path"
+      .. s_or_not
+      .. " for Laravel components "
+      .. table.concat(vim.g.blade_nav.laravel_componets, '", "')
+      .. '"'
+    )
+  end
 end
 
 M.check = function()

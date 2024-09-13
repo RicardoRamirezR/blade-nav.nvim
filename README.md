@@ -57,6 +57,7 @@ Open Blade views from controller or route definitions like
   installation and configuration).
 - Has support for Livewire components v2 and v3.
 - Has support for Filament components.
+- Provides support for additional paths for Laravel Blade components.
 
 ## Installation
 
@@ -144,6 +145,21 @@ For [coq](https://github.com/ms-jpq/coq_nvim), you should install the plugin,
 
 For packages that has Blade components, you should run the Ex command
 `BladeNavInstallArtisanCommand` to install the artisan command.
+
+
+If you want `blade-nav` to search in other paths when using `gf` on a Laravel
+component, you can specify this by enabling the `exrc` option and adding to one
+of the supported files, i.e.:
+
+```lua
+vim.g.blade_nav = {
+  laravel_componets = {
+    "resources/views/common",
+  },
+}
+```
+
+See `:h VIMINIT`
 
 ## Health
 
