@@ -407,25 +407,38 @@ local function get_component_name_and_prefix()
 end
 
 local function laravel_component(component_name)
-  return {
-    "resources/views/components/" .. component_name .. ".blade.php",
-    "app/View/Components/" .. capitalize(component_name) .. ".php",
+  local paths = {
+    components = { "resources/views/components/" .. component_name .. ".blade.php" },
+    class = { "app/View/Components/" .. capitalize(component_name) .. ".php" },
   }
+
+  if vim.g.blade_nav and vim.g.blade_nav.laravel_componets then
+    for _, path in ipairs(vim.g.blade_nav.laravel_componets) do
+      table.insert(paths.components, #paths.components + 1, path .. "/" .. component_name .. ".blade.php")
+    end
+  end
+  if vim.g.blade_nav and vim.g.blade_nav.laravel_classes then
+    for _, path in ipairs(vim.g.blade_nav.laravel_classes) do
+      table.insert(paths.components, #paths.components + 1, path .. "/" .. capitalize(component_name) .. ".php")
+    end
+  end
+
+  return paths
 end
 
 local function laravel_view(component_name)
   component_name = component_name:gsub("['()%)]", "")
   return {
-    "resources/views/" .. component_name .. ".blade.php",
-    nil,
+    componets = { "resources/views/" .. component_name .. ".blade.php" },
+    class = { nil },
   }
 end
 
 local function livewire_component(component_name)
   component_name = component_name:gsub("['()%)]", "")
   return {
-    "resources/views/livewire/" .. component_name .. ".blade.php",
-    "app/Http/Livewire/" .. utils.kebab_to_pascal(component_name) .. ".php",
+    componets = { "resources/views/livewire/" .. component_name .. ".blade.php" },
+    class = { "app/Http/Livewire/" .. utils.kebab_to_pascal(component_name) .. ".php" },
   }
 end
 
@@ -466,8 +479,8 @@ local function package_component(text)
   text = utils.explode(",", text)
   local package_name, component_name = check_for_filament_support(text)
   return {
-    "vendor/" .. package_name .. "/resources/views/components/" .. component_name .. ".blade.php",
-    nil,
+    componets = { "vendor/" .. package_name .. "/resources/views/components/" .. component_name .. ".blade.php" },
+    class = { nil },
   }
 end
 
@@ -512,7 +525,8 @@ local function get_paths(prefix, component_name)
     ["package"] = package_component,
   }
 
-  return prefix_map[prefix](component_name)
+  local paths = prefix_map[prefix](component_name)
+  return paths.components, paths.class
 end
 
 local function gf_module(prefix)
@@ -552,29 +566,33 @@ end
 local function gf_file_or_class(prefix, component_name)
   component_name = string.gsub(component_name, "%.", "/")
 
-  local file_path, class_path = unpack(get_paths(prefix, component_name))
+  local file_paths, class_paths = get_paths(prefix, component_name)
   local choices = {}
   local file_that_exists
 
-  if vim.fn.filereadable(file_path) == 1 then
-    table.insert(choices, "1: " .. file_path)
-    file_that_exists = file_path
-  else
-    local dir_path = file_path:gsub("%.blade%.php$", "")
-    if vim.fn.isdirectory(dir_path) ~= 0 then
-      vim.cmd("edit " .. dir_path .. "/index.blade.php")
-      return true
+  for _, file_path in ipairs(file_paths) do
+    if vim.fn.filereadable(file_path) == 1 then
+      table.insert(choices, (#choices + 1) .. ": " .. file_path)
+      file_that_exists = file_path
+    else
+      local dir_path = file_path:gsub("%.blade%.php$", "")
+      if vim.fn.isdirectory(dir_path) ~= 0 then
+        vim.cmd("edit " .. dir_path .. "/index.blade.php")
+        return true
+      end
     end
   end
 
-  if vim.fn.filereadable(class_path) == 1 then
-    table.insert(choices, "2: " .. class_path)
-    file_that_exists = class_path
-  elseif prefix == "livewire" and class_path then
-    class_path = class_path:gsub("app/Http/Livewire", "app/Livewire")
+  for _, class_path in ipairs(class_paths) do
     if vim.fn.filereadable(class_path) == 1 then
-      table.insert(choices, "2: " .. class_path)
+      table.insert(choices, (#choices + 1) .. ": " .. class_path)
       file_that_exists = class_path
+    elseif prefix == "livewire" and class_path then
+      class_path = class_path:gsub("app/Http/Livewire", "app/Livewire")
+      if vim.fn.filereadable(class_path) == 1 then
+        table.insert(choices, (#choices + 1) .. ": " .. class_path)
+        file_that_exists = class_path
+      end
     end
   end
 
@@ -583,8 +601,8 @@ local function gf_file_or_class(prefix, component_name)
     return true
   end
 
-  if #choices == 0 and file_path and not class_path then
-    vim.cmd("edit " .. file_path)
+  if #choices == 0 and #file_paths == 1 and #class_paths == 0 then
+    vim.cmd("edit " .. file_paths[1])
     return true
   end
 
@@ -593,16 +611,18 @@ local function gf_file_or_class(prefix, component_name)
     local component = capitalize(remove_prefix(component_name, prefix))
     if prefix == "x-" and component_name:find("%.") == nil then
       has_options = true
-      table.insert(choices, "1: " .. file_path)
-      if component_name:find("%.") == nil then
-        table.insert(choices, (#choices + 1) .. ": " .. file_path:gsub("%.blade%.php$", "/index.blade.php"))
+      for _, file_path in ipairs(file_paths) do
+        table.insert(choices, (#choices + 1) .. ": " .. file_path)
+        if component_name:find("%.") == nil then
+          table.insert(choices, (#choices + 1) .. ": " .. file_path:gsub("%.blade%.php$", "/index.blade.php"))
+        end
       end
       table.insert(choices, (#choices + 1) .. ": php artisan make:component " .. component)
     end
 
     if string.find(prefix, "livewire") then
       has_options = true
-      table.insert(choices, "1: php artisan make:livewire " .. component:gsub("['()%)]", ""))
+      table.insert(choices, (#choices + 1) .. ": php artisan make:livewire " .. component:gsub("['()%)]", ""))
     end
   end
 
