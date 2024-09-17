@@ -2,13 +2,16 @@
 local utils = require("blade-nav.utils")
 
 local M = {}
+M.not_close_tag = false
 
 local registered = false
 
-M.setup = function()
+M.setup = function(opts)
   if registered then
     return
   end
+
+  M.not_close_tag = not (opts.close_tag_on_complete or true)
 
   registered = true
 
@@ -38,7 +41,7 @@ M.setup = function()
 
   source.complete = function(_, request, callback)
     local input = string.sub(request.context.cursor_before_line, request.offset - 1):gsub("%s+", "")
-    local index, names = utils.get_view_names(input)
+    local index, names = utils.get_view_names(input, M.not_close_tag)
     local items = {}
 
     for _, name in ipairs(names) do

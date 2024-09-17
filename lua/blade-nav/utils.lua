@@ -284,7 +284,7 @@ end
 --- Get all view names
 --- @param input string
 --- @return number, table
-M.get_view_names = function(input)
+M.get_view_names = function(input, not_include_closing_tag)
   local patterns = {
     { pattern = "to_route%(",    tpl = "to_route('%s')",           ft = { "blade", "php" }, fn = find_routes },
     { pattern = "route%(",       tpl = "route('%s')",              ft = { "blade", "php" }, fn = find_routes },
@@ -305,10 +305,14 @@ M.get_view_names = function(input)
       local names = p.fn()
       for _, name in ipairs(names) do
         if name then
+          local new_text = p.tpl:format(name)
+          if not_include_closing_tag then
+            new_text = new_text:gsub("'%)", "")
+          end
           table.insert(items, {
             filterText = input .. name,
             label = p.tpl:format(name):gsub("^%s+", ""),
-            newText = p.tpl:format(name),
+            newText = new_text,
           })
         end
       end
