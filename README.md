@@ -67,12 +67,17 @@ To get started with `blade-nav.nvim`, add the plugin to your `init.lua` or `init
 
 ```lua
 use {
-    'ricardoramirezr/blade-nav.nvim',
-    requires = {
-        'hrsh7th/nvim-cmp', -- if using nvim-cmp
-        { "ms-jpq/coq_nvim", branch = "coq" }, -- if using coq
-    },
-    ft = {'blade', 'php'}
+  "ricardoramirezr/blade-nav.nvim",
+  requires = {
+    "hrsh7th/nvim-cmp",                    -- if using nvim-cmp
+    { "ms-jpq/coq_nvim", branch = "coq" }, -- if using coq
+  },
+  ft = { "blade", "php" },
+  config = function()
+    require("blade-nav").setup({
+      cmp_close_tag = true, -- default: true
+    })
+  end,
 }
 ```
     
@@ -81,11 +86,14 @@ use {
 ```lua
 {
     'ricardoramirezr/blade-nav.nvim',
-    dependencies = {
+    dependencies = { -- totally optional
         'hrsh7th/nvim-cmp', -- if using nvim-cmp
         { "ms-jpq/coq_nvim", branch = "coq" }, -- if using coq
     },
     ft = {'blade', 'php'} -- optional, improves startup time
+    opts = {
+        close_tag_on_complete = true, -- default: true
+    },
 }
 ```
 
@@ -143,9 +151,15 @@ For [cmd](https://github.com/hrsh7th/nvim-cmp) you should install the plugin.
 For [coq](https://github.com/ms-jpq/coq_nvim), you should install the plugin,
 `coq_settings.match.max_results` limits the result shown.
 
+For completion to place nice with autopairs, you can set the
+`close_tag_on_complete` to false, blade-nav will not close the tag on complete.
+
+```lua
+  close_tag_on_complete = false, -- default: true
+```
+
 For packages that has Blade components, you should run the Ex command
 `BladeNavInstallArtisanCommand` to install the artisan command.
-
 
 If you want `blade-nav` to search in other paths when using `gf` on a Laravel
 component, you can specify this by enabling the `exrc` option and adding to one
