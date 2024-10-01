@@ -412,8 +412,8 @@ local function laravel_component(component_name)
     class = { "app/View/Components/" .. capitalize(component_name) .. ".php" },
   }
 
-  if vim.g.blade_nav and vim.g.blade_nav.laravel_componets then
-    for _, path in ipairs(vim.g.blade_nav.laravel_componets) do
+  if vim.g.blade_nav and vim.g.blade_nav.laravel_components then
+    for _, path in ipairs(vim.g.blade_nav.laravel_components) do
       table.insert(paths.components, #paths.components + 1, path .. "/" .. component_name .. ".blade.php")
     end
   end
@@ -429,7 +429,7 @@ end
 local function laravel_view(component_name)
   component_name = component_name:gsub("['()%)]", "")
   return {
-    componets = { "resources/views/" .. component_name .. ".blade.php" },
+    components = { "resources/views/" .. component_name .. ".blade.php" },
     class = { nil },
   }
 end
@@ -437,7 +437,7 @@ end
 local function livewire_component(component_name)
   component_name = component_name:gsub("['()%)]", "")
   return {
-    componets = { "resources/views/livewire/" .. component_name .. ".blade.php" },
+    components = { "resources/views/livewire/" .. component_name .. ".blade.php" },
     class = { "app/Http/Livewire/" .. utils.kebab_to_pascal(component_name) .. ".php" },
   }
 end
@@ -479,7 +479,7 @@ local function package_component(text)
   text = utils.explode(",", text)
   local package_name, component_name = check_for_filament_support(text)
   return {
-    componets = { "vendor/" .. package_name .. "/resources/views/components/" .. component_name .. ".blade.php" },
+    components = { "vendor/" .. package_name .. "/resources/views/components/" .. component_name .. ".blade.php" },
     class = { nil },
   }
 end

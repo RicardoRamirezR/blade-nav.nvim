@@ -12,7 +12,7 @@ class BladeNav extends Command
      *
      * @var string
      */
-    protected $description = 'List view componets aliases';
+    protected $description = 'List view components aliases';
 
     /**
      * The name and signature of the console command.
