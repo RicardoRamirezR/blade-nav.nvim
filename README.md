@@ -167,7 +167,7 @@ of the supported files, i.e.:
 
 ```lua
 vim.g.blade_nav = {
-  laravel_componets = {
+  laravel_components = {
     "resources/views/common",
   },
 }
