@@ -11,7 +11,7 @@ M.setup = function(opts)
     return
   end
 
-  M.not_close_tag = not (opts.close_tag_on_complete or true)
+  M.not_close_tag = not (opts.close_tag_on_complete ~= false)
 
   registered = true
 
