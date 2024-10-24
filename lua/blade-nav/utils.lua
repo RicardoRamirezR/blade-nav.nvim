@@ -180,7 +180,6 @@ M.get_routes = function(route_name)
     "route:list",
     "--name=" .. route_name,
     "--json",
-    "--columns=name,action",
   })
 
   if #result == 0 then
@@ -370,7 +369,7 @@ M.get_root_and_lang = function()
   local root = tree:root()
   local lang = parser:lang()
 
-  if not M.in_table(lang, { "blade", "php" }) then
+  if not M.in_table(lang, { "blade", "php", "vue" }) then
     vim.notify("Info: works only on PHP.")
     return nil, nil
   end
@@ -483,6 +482,55 @@ M.kebab_to_pascal = function(input)
   end)
   local text = result:gsub("^%l", string.upper)
   return text
+end
+
+function M.debug_print(...)
+  -- Walk up the stack to find the first non-debug function
+  local level = 2
+  local info
+  local found = false
+  while not found do
+    info = debug.getinfo(level, "Snl")
+    if not info then
+      info = debug.getinfo(2, "Snl")
+      break
+    end
+    if info.name ~= "debug_print" then
+      found = true
+    else
+      level = level + 1
+    end
+  end
+
+  -- Format the arguments, properly handling nil values
+  local args = { ... }
+  local msg_parts = {}
+  -- Get the number of arguments (including nil values)
+  local n = select("#", ...)
+  for i = 1, n do
+    local v = select(i, ...)
+    if v == nil then
+      table.insert(msg_parts, "nil")
+    else
+      table.insert(msg_parts, tostring(v))
+    end
+  end
+  local msg = table.concat(msg_parts, " ")
+
+  -- Get the actual function name
+  local func_name = info.name or "unknown_function"
+  if func_name == "?" then
+    func_name = "unknown_function"
+  end
+
+  -- Extract plugin name from the path
+  local plugin_name = info.short_src:match("([^/]+)/lua/.+$")
+      or info.short_src:match("([^/]+)/plugin/.+$")
+      or info.short_src -- fallback to short_src if pattern doesn't match
+
+  -- Construct the debug message
+  local debug_msg = string.format("[DEBUG] %s:%d in %s(): %s", plugin_name, info.currentline, func_name, msg)
+  vim.api.nvim_echo({ { debug_msg, "WarningMsg" } }, true, {})
 end
 
 return M

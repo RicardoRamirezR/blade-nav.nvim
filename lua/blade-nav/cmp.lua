@@ -41,7 +41,7 @@ M.setup = function(opts)
 
   source.complete = function(_, request, callback)
     local input = string.sub(request.context.cursor_before_line, request.offset - 1):gsub("%s+", "")
-    local index, names = utils.get_view_names(input, M.not_close_tag)
+    local _, names = utils.get_view_names(input, M.not_close_tag)
     local items = {}
 
     for _, name in ipairs(names) do
