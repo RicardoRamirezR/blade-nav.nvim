@@ -2,6 +2,8 @@
 local utils = require("blade-nav.utils")
 
 local M = {}
+
+local cached_path = nil
 local gf_mapping
 
 local registered = false
@@ -115,7 +117,7 @@ end
 local function query_string_for_function()
   return [[
     (function_call_expression
-      function: (name) @fn (#any-of? @fn "config" "view" "route" "to_route")
+      function: (name) @fn (#any-of? @fn "config" "view" "route" "to_route" "inertia")
       arguments: (arguments
         (argument
           (string (string_content) @name)))
@@ -174,8 +176,9 @@ local function check_for_scope(lang, ts_node)
     )
   ]]
   local views = {
-    { fn = "Route", name = "view" },
-    { fn = "View",  name = "make" },
+    { fn = "Interia", name = "render" },
+    { fn = "Route",   name = "view" },
+    { fn = "View",    name = "make" },
   }
 
   while node do
@@ -465,6 +468,78 @@ local function livewire_component(component_name)
   }
 end
 
+local function extract_pages_path(file_content)
+  local pattern = "resolvePageComponent%s*%(%s*[`'\"](.-)/%${name}%.vue[`'\"]"
+
+  -- Find the matching string
+  local pages_path = file_content:match(pattern)
+  if not pages_path then
+    return nil
+  end
+
+  -- Clean up the path
+  pages_path = pages_path:gsub("^%.?/?", "")
+
+  return pages_path
+end
+
+local function read_app_js()
+  -- Find the project root (assuming you're in a Laravel project)
+  local root = vim.fn.getcwd()
+  local app_js_path = root .. "/resources/js/app.js"
+
+  -- Check if file exists
+  if vim.fn.filereadable(app_js_path) ~= 1 then
+    return nil, "app.js not found at: " .. app_js_path
+  end
+
+  -- Read the file content
+  local lines = {}
+  for line in io.lines(app_js_path) do
+    table.insert(lines, line)
+  end
+
+  -- Combine all lines
+  local content = table.concat(lines, "\n")
+  return content
+end
+
+local function get_pages_path()
+  local content, err = read_app_js()
+  if not content then
+    -- Handle error or return default
+    vim.notify("Failed to read app.js: " .. (err or "unknown error"), vim.log.levels.WARN)
+    return "Pages" -- default fallback
+  end
+
+  local pages_path = extract_pages_path(content)
+  if not pages_path then
+    -- Handle case where pattern wasn't found
+    vim.notify("Could not find Pages path in app.js, using default", vim.log.levels.INFO)
+    return "Pages"
+  end
+
+  return pages_path
+end
+
+function M.get_pages_path()
+  if cached_path then
+    return cached_path
+  end
+
+  cached_path = get_pages_path()
+  return cached_path
+end
+
+local function inertia_component(component_name)
+  local path = M.get_pages_path()
+  component_name = component_name:gsub("['()%)]", "")
+  return {
+    components = { "resources/js/" .. path .. "/" .. component_name .. ".vue" },
+    class = {},
+  }
+end
+
 local function check_for_filament_support(text)
   local support = {
     "actions",
@@ -546,9 +621,16 @@ local function get_paths(prefix, component_name)
     ["livewire"] = livewire_component,
     ["x-"] = laravel_component,
     ["package"] = package_component,
+    ["Inertia::render"] = inertia_component,
+    ["inertia"] = inertia_component,
   }
 
-  local paths = prefix_map[prefix](component_name)
+  local handler = prefix_map[prefix]
+  if not handler then
+    return {}, {}
+  end
+
+  local paths = handler(component_name)
   return paths.components, paths.class
 end
 
@@ -656,6 +738,10 @@ local function gf_file_or_class(prefix, component_name)
 end
 
 function M.gf()
+  if require("blade-nav.gf_vue").gf() then
+    return
+  end
+
   local prefix, component_name = get_component_name_and_prefix()
 
   if not prefix or not component_name then
@@ -733,12 +819,12 @@ M.setup = function()
 
   gf_mapping = get_keymap("n", "gf")
 
-  vim.api.nvim_create_autocmd("BufWinEnter", {
+  vim.api.nvim_create_autocmd({ "BufNewFile", "BufEnter", "BufRead" }, {
     group = vim.api.nvim_create_augroup("blade-nav-filetype-detection", { clear = true }),
     callback = function(args)
       local filetype = vim.bo[args.buf].filetype
 
-      if filetype == "php" or filetype == "blade" then
+      if filetype == "php" or filetype == "blade" or filetype == "vue" then
         pcall(vim.keymap.del, "n", "gf", { buffer = args.buf })
 
         vim.keymap.set("n", "gf", function()
