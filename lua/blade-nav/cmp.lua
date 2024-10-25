@@ -50,7 +50,7 @@ M.setup = function(opts)
         label = name.label,
         cmp = {
           kind_hl_group = "CmpItemKindBladeNav",
-          kind_text = "  " .. " blade-nav",
+          kind_text = "BladeNav",
         },
         textEdit = {
           newText = name.newText,
