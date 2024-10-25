@@ -175,6 +175,31 @@ vim.g.blade_nav = {
 
 See `:h VIMINIT`
 
+## Customization with nvim-cmp
+
+If you want to add an icon to blade-nav completion items in cmp, you can configure it through nvim-cmp's formatting options:
+
+```
+local kind_icons = {
+    BladeNav = "", 
+}
+
+local cmp = require('cmp')
+
+cmp.setup({
+  formatting = {
+    format = function(entry, item)
+
+      if kind_icons[item.kind] then
+        item.kind = string.format('%s %s', kind_icons[item.kind], item.kind)
+      end
+
+      return item
+    end
+  },
+})
+```
+
 ## Health
 
 To check the health of the plugin, run `:checkhealth blade-nav`.
