@@ -445,21 +445,6 @@ local function livewire_component(component_name)
   }
 end
 
-local function extract_pages_path(file_content)
-  local pattern = "resolvePageComponent%s*%(%s*[`'\"](.-)/%${name}%.vue[`'\"]"
-
-  -- Find the matching string
-  local pages_path = file_content:match(pattern)
-  if not pages_path then
-    return nil
-  end
-
-  -- Clean up the path
-  pages_path = pages_path:gsub("^%.?/?", "")
-
-  return pages_path
-end
-
 local function read_app_js()
   -- Find the project root (assuming you're in a Laravel project)
   local root = vim.fn.getcwd()
@@ -489,7 +474,8 @@ local function get_pages_path()
     return "Pages" -- default fallback
   end
 
-  local pages_path = extract_pages_path(content)
+  local extractor = require("blade-nav.inertia-path-extractor")
+  local pages_path = extractor.extract_pages_path(content)
   if not pages_path then
     -- Handle case where pattern wasn't found
     vim.notify("Could not find Pages path in app.js, using default", vim.log.levels.INFO)
