@@ -445,32 +445,38 @@ local function livewire_component(component_name)
   }
 end
 
-local function read_app_js()
-  -- Find the project root (assuming you're in a Laravel project)
-  local root = vim.fn.getcwd()
-  local app_js_path = root .. "/resources/js/app.js"
+local function read_app_file()
+  local root = utils.get_root_dir()
 
-  -- Check if file exists
-  if vim.fn.filereadable(app_js_path) ~= 1 then
-    return nil, "app.js not found at: " .. app_js_path
+  -- Define possible file paths
+  local possible_paths = {
+    root .. "/resources/js/app.js",
+    root .. "/resources/js/app.ts",
+  }
+
+  -- Try to find and read the first available file
+  for _, file_path in ipairs(possible_paths) do
+    if vim.fn.filereadable(file_path) == 1 then
+      -- Read the file content
+      local lines = {}
+      for line in io.lines(file_path) do
+        table.insert(lines, line)
+      end
+      -- Combine all lines
+      local content = table.concat(lines, "\n")
+      return content, file_path
+    end
   end
 
-  -- Read the file content
-  local lines = {}
-  for line in io.lines(app_js_path) do
-    table.insert(lines, line)
-  end
-
-  -- Combine all lines
-  local content = table.concat(lines, "\n")
-  return content
+  -- If no file is found, return error
+  return nil, string.format("Neither app.js nor app.ts found in %s/resources/js/", root)
 end
 
 local function get_pages_path()
-  local content, err = read_app_js()
+  local content, err = read_app_file()
   if not content then
     -- Handle error or return default
-    vim.notify("Failed to read app.js: " .. (err or "unknown error"), vim.log.levels.WARN)
+    vim.notify("Failed to read app.js or app.ts: " .. (err or "unknown error"), vim.log.levels.WARN)
     return "Pages" -- default fallback
   end
 
