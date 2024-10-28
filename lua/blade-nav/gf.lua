@@ -153,7 +153,7 @@ local function check_for_scope(lang, ts_node)
     )
   ]]
   local views = {
-    { fn = "Interia", name = "render" },
+    { fn = "Inertia", name = "render" },
     { fn = "Route",   name = "view" },
     { fn = "View",    name = "make" },
   }
