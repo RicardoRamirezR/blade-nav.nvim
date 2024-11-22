@@ -80,8 +80,31 @@ local function find_fn_and_name(lang, ts_node, query_string, content)
   local query = ts.query.parse(lang, query_string)
 
   for _, matches, _ in query:iter_matches(ts_node, content) do
-    findings.fn = ts.get_node_text(matches[1], content)
-    findings.name = ts.get_node_text(matches[2], content)
+    local function process_match(match)
+      if not match then
+        return nil
+      end
+
+      -- Check if it's a valid node
+      if not pcall(function()
+            return match:type()
+          end) then
+        return nil
+      end
+
+      return ts.get_node_text(match, content)
+
+      -- Optional: Type-specific processing
+      -- local node_type = match:type()
+      -- if node_type == "desired_type" then
+      --   return vim.treesitter.get_node_text(match, content)
+      -- end
+      -- return nil
+    end
+
+    -- Safe extraction
+    findings.fn = process_match(matches[1])
+    findings.name = process_match(matches[2])
   end
 
   return findings, findings.fn ~= nil
@@ -710,13 +733,23 @@ M.setup = function()
 
   gf_mapping = get_keymap("n", "gf")
 
-  vim.api.nvim_create_autocmd("FileType", {
+  vim.api.nvim_create_autocmd("BufWinEnter", {
     group = vim.api.nvim_create_augroup("blade-nav-filetype-detection", { clear = true }),
-    pattern = { "blade", "php" },
-    callback = function()
-      vim.keymap.set("n", "gf", function()
-        M.gf()
-      end, { buffer = true, noremap = true, silent = true, desc = "BladeNav: Open file under cursor" })
+    callback = function(args)
+      local filetype = vim.bo[args.buf].filetype
+
+      if filetype == "php" or filetype == "blade" then
+        pcall(vim.keymap.del, "n", "gf", { buffer = args.buf })
+
+        vim.keymap.set("n", "gf", function()
+          M.gf()
+        end, {
+          buffer = args.buf,
+          noremap = true,
+          silent = true,
+          desc = "BladeNav: Open file under cursor",
+        })
+      end
     end,
   })
 
