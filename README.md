@@ -173,6 +173,14 @@ vim.g.blade_nav = {
 }
 ```
 
+If you want to disable routes completion, you can set the `include_routes` option to `false`.
+
+```lua
+vim.g.blade_nav = {
+  include_routes = false
+}
+```
+
 See `:h VIMINIT`
 
 ## Customization with nvim-cmp
