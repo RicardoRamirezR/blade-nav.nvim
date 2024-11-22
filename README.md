@@ -93,6 +93,7 @@ use {
     ft = {'blade', 'php'}, -- optional, improves startup time
     opts = {
         close_tag_on_complete = true, -- default: true
+        include_routes = true, -- default: true
     },
 }
 ```
@@ -156,6 +157,12 @@ For completion to place nice with autopairs, you can set the
 
 ```lua
   close_tag_on_complete = false, -- default: true
+```
+
+For the plugin to include routes in the search, you can set the `include_routes` to false.
+
+```lua
+  include_routes = false, -- default: true
 ```
 
 For packages that has Blade components, you should run the Ex command
