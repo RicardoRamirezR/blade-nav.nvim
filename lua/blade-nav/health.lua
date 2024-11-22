@@ -129,7 +129,7 @@ local function check_setup()
     )
   end
 
-  if vim.g.blade_nav then
+  if vim.g.blade_nav and vim.g.blade_nav.include_routes then
     if type(vim.g.blade_nav.include_routes) ~= "boolean" then
       warn("Include routes should be boolean")
     end
