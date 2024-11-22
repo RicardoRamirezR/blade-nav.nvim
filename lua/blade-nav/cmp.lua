@@ -3,6 +3,7 @@ local utils = require("blade-nav.utils")
 
 local M = {}
 M.not_close_tag = false
+M.include_routes = true
 
 local registered = false
 
@@ -12,6 +13,7 @@ M.setup = function(opts)
   end
 
   M.not_close_tag = not (opts.close_tag_on_complete ~= false)
+  M.include_routes = (opts.include_routes ~= false)
 
   registered = true
 
@@ -36,7 +38,7 @@ M.setup = function(opts)
   end
 
   source.get_keyword_pattern = function()
-    return utils.get_keyword_pattern()
+    return utils.get_keyword_pattern(M.include_routes)
   end
 
   source.complete = function(_, request, callback)
