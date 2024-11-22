@@ -325,9 +325,8 @@ M.get_view_names = function(input, not_include_closing_tag)
 end
 
 --- Get keyword pattern
---- @param include_routes boolean
 --- @return string
-M.get_keyword_pattern = function(include_routes)
+M.get_keyword_pattern = function()
   local components_keywords = {
     "<x-",
     "<livewire:",
@@ -342,8 +341,8 @@ M.get_keyword_pattern = function(include_routes)
     "View::make",
     "Route::view",
   }
-  
-  if not include_routes then
+
+  if vim.g.blade_nav and not vim.g.blade_nav.include_routes then
     functions_keywords = vim.tbl_filter(function(keyword)
       return not M.in_table(keyword, { "route", "to_route" })
     end, functions_keywords)
