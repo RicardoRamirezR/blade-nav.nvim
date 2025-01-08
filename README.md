@@ -63,6 +63,31 @@ Open Blade views from controller or route definitions like
 
 To get started with `blade-nav.nvim`, add the plugin to your `init.lua` or `init.vim` file:
 
+**Using vim-plug**:
+
+```vim
+-- init.vim
+call plug#begin()
+Plug 'ricardoramirezr/blade-nav.nvim', {'for': ['blade', 'php']}
+call plug#end()
+lua << EOF
+require("blade-nav").setup({
+  cmp_close_tag = true, -- default: true
+})
+EOF
+```
+
+```lua
+-- init.lua
+local Plug = vim.fn['plug#']
+vim.call('plug#begin')
+Plug('ricardoramirezr/blade-nav.nvim', { ['for'] = { 'blade', 'php' } })
+vim.call('plug#end')
+require("blade-nav").setup({
+  cmp_close_tag = true, -- default: true
+})
+```
+
 **Using packer**:
 
 ```lua
