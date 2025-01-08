@@ -68,6 +68,8 @@ To get started with `blade-nav.nvim`, add the plugin to your `init.lua` or `init
 ```vim
 -- init.vim
 call plug#begin()
+Plug 'hrsh7th/nvim-cmp'                    " if using nvim-cmp
+Plug 'ms-jpq/coq_nvim', { 'branch': 'coq' } " if using coq
 Plug 'ricardoramirezr/blade-nav.nvim', {'for': ['blade', 'php']}
 call plug#end()
 lua << EOF
@@ -81,6 +83,8 @@ EOF
 -- init.lua
 local Plug = vim.fn['plug#']
 vim.call('plug#begin')
+Plug('hrsh7th/nvim-cmp') -- if using nvim-cmp
+Plug('ms-jpq/coq_nvim', { ['branch'] = 'coq' }) -- if using coq
 Plug('ricardoramirezr/blade-nav.nvim', { ['for'] = { 'blade', 'php' } })
 vim.call('plug#end')
 require("blade-nav").setup({
