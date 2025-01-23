@@ -342,12 +342,12 @@ M.get_keyword_pattern = function()
     "Route::view",
   }
 
-  if vim.g.blade_nav and not vim.g.blade_nav.include_routes then
+  if vim.g.blade_nav and vim.g.blade_nav.include_routes == false then
     functions_keywords = vim.tbl_filter(function(keyword)
       return not M.in_table(keyword, { "route", "to_route" })
     end, functions_keywords)
   end
-  
+
   local functions_pattern = [[\(]] .. table.concat(functions_keywords, "\\|") .. [[\)\(('\)*\w*]]
   local components_pattern = [[\(]] .. table.concat(components_keywords, "\\|") .. [[\)\w*]]
 
