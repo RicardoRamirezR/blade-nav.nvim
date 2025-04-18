@@ -138,7 +138,7 @@ use {
     create the component using `php artisan make:livewire`.
     - If neither exists and is a Blade component, it can present two or three
     options, depending on the component type. The options are, create the view
-    component and cretate the component via `php artisan make:component`. A
+    component and create the component via `php artisan make:component`. A
     third option will be presented if you want to create an Anonymous Index Component.
 
     > If the file does not exist and is in a subfolder that does not exist yet,
@@ -169,7 +169,7 @@ use {
     - `to_route('`
 
     And the list of files will appear, and with the magic of completion the
-    list if filtered while you write. 
+    list is filtered while you write. 
     
 ## Configuration
 
@@ -180,14 +180,14 @@ For [cmd](https://github.com/hrsh7th/nvim-cmp) you should install the plugin.
 For [coq](https://github.com/ms-jpq/coq_nvim), you should install the plugin,
 `coq_settings.match.max_results` limits the result shown.
 
-For completion to place nice with autopairs, you can set the
+For completion to play nice with autopairs, you can set the
 `close_tag_on_complete` to false, blade-nav will not close the tag on complete.
 
 ```lua
   close_tag_on_complete = false, -- default: true
 ```
 
-For packages that has Blade components, you should run the Ex command
+For packages that have Blade components, you should run the Ex command
 `BladeNavInstallArtisanCommand` to install the artisan command.
 
 If you want `blade-nav` to search in other paths when using `gf` on a Laravel
