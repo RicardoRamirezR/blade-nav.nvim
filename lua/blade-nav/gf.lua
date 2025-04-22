@@ -26,7 +26,9 @@ local function gf_native()
     local rhs = vim.api.nvim_replace_termcodes(gf_mapping.rhs, true, true, true)
     vim.api.nvim_feedkeys(rhs, "n", false)
   else
-    vim.fn.execute("normal! gf")
+    pcall(function()
+      vim.fn.execute("normal! gf")
+    end)
   end
 end
 
