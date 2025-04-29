@@ -36,6 +36,7 @@ end
 
 local function get_name_info(name)
   local names = {
+    markdown = { position = 1, index = 0 },
     view = { position = 1, index = 0 },
     ["View::make"] = { position = 2, index = 0 },
     ["Route::view"] = { position = 2, index = 1 },

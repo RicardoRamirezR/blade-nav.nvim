@@ -39,6 +39,7 @@ From Blade Files                                         *blade-nav-blade-files*
 - Navigate to included views using `@include('name')`.
 - Open Laravel components using `<x-name />`.
 - Open Livewire components using `<livewire:name />` or `@livewire('name')`.
+- Open Laravel component using @component('name').
 
 From Controllers and Routes                              *blade-nav-controllers*
 
@@ -75,6 +76,7 @@ to be installed and configured), write either:
   - `<x-`
   - `<livewire`
   - `@livewire`
+  - `@component
 
 And the list of files will appear, and with the magic of cmp the list is filtered
 while you write.

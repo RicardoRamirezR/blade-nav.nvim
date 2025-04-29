@@ -36,6 +36,7 @@ Blade views, and components in Laravel applications.
 - Navigate to included views using `@include('name')`
 - Open Blade components using `<x-name />`
 - Open Livewire components using `<livewire:name />` or `@livewire('name')`
+- Open Blade components using `@component('name')`
 
 ### From Controllers and Routes:
 

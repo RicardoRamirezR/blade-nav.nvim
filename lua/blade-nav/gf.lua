@@ -115,7 +115,7 @@ end
 local function query_string_for_function()
   return [[
     (function_call_expression
-      function: (name) @fn (#any-of? @fn "config" "view" "route" "to_route")
+      function: (name) @fn (#any-of? @fn "config" "makrdown" "view" "route" "to_route")
       arguments: (arguments
         (argument
           (string (string_content) @name)))
@@ -296,7 +296,7 @@ local function find_name(text_input, col)
   start_pos = nil
   for i = col, 1, -1 do
     if text:sub(i, i):match("%s") then
-      if text:sub(i + 1, i + 1):match("[cCrRvV]") then
+      if text:sub(i + 1, i + 1):match("[cCmrRvV]") then
         start_pos = i + 1
         break
       elseif text:sub(i + 1, i + 2):match("/>]") then
@@ -305,7 +305,7 @@ local function find_name(text_input, col)
       end
     end
 
-    if text:sub(i, i):match("[<@rRvV]") then
+    if text:sub(i, i):match("[<@mrRvV]") then
       if not text:sub(i - 1, i - 1):match("[%w%.%-%_:]") then
         start_pos = i
         break
@@ -541,6 +541,7 @@ end
 
 local function get_paths(prefix, component_name)
   local prefix_map = {
+    ["component"] = laravel_view,
     ["extends"] = laravel_view,
     ["include"] = laravel_view,
     ["livewire"] = livewire_component,
@@ -554,9 +555,9 @@ end
 
 local function gf_module(prefix)
   local gfs = {
-    { prefixes = { "view", "View::make", "Route::view" }, fn = "gf_views" },
-    { prefixes = { "config", "Config::[gs]et" },          fn = "gf_config" },
-    { prefixes = { "route" },                             fn = "gf_routes" },
+    { prefixes = { "markdown", "view", "View::make", "Route::view" }, fn = "gf_views" },
+    { prefixes = { "config", "Config::[gs]et" },                      fn = "gf_config" },
+    { prefixes = { "route" },                                         fn = "gf_routes" },
   }
 
   for _, gf in ipairs(gfs) do
@@ -582,7 +583,7 @@ local function gf_by_module(prefix, component_name)
   end
 end
 
---- Go to file or class for <x-*>|@include|@extends|@livewire|<livewire:*>
+--- Go to file or class for <x-*>|@include|@component|@extends|@livewire|<livewire:*>
 --- @param prefix string
 --- @param component_name string
 --- @return boolean|nil true if gf was successful

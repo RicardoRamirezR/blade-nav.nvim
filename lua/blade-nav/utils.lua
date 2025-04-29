@@ -109,6 +109,7 @@ M.determine_prefix_and_suffix = function(input)
     ["@live"] = { prefix = "@livewire('", suffix = "')" },
     ["@exte"] = { prefix = "@extends('", suffix = "')" },
     ["@incl"] = { prefix = "@include('", suffix = "')" },
+    ["@component"] = { prefix = "@component('", suffix = "')" },
   }
 
   for key, value in pairs(prefix_map) do
@@ -130,6 +131,7 @@ M.get_components = function(prefix)
     ["@include('"] = "resources/views/",
     ["@extends('"] = "resources/views/",
     ["<x-"] = "resources/views/components/",
+    ["@component('"] = "resources/views/",
   }
 
   local components_dir = component_dirs[prefix]
@@ -290,9 +292,10 @@ M.get_view_names = function(input, not_include_closing_tag)
     { pattern = "route%(",       tpl = "route('%s')",              ft = { "blade", "php" }, fn = find_routes },
     { pattern = "<x%-",          tpl = "<x-%s />",                 ft = "blade",            fn = find_components },
     { pattern = "<livewire",     tpl = "<livewire:%s />",          ft = "blade",            fn = find_livewire },
-    { pattern = "@livewire%(",   tpl = "@livewire('%s')",          ft = "blade",            fn = find_livewire },
+    { pattern = "@component%(",  tpl = "@component('%s')",         ft = "blade",            fn = find_views },
     { pattern = "@extends%(",    tpl = "@extends('%s')",           ft = "blade",            fn = find_views },
     { pattern = "@include%(",    tpl = "@include('%s')",           ft = "blade",            fn = find_views },
+    { pattern = "@livewire%(",   tpl = "@livewire('%s')",          ft = "blade",            fn = find_livewire },
     { pattern = "Route::view%(", tpl = "Route::view('uri', '%s')", ft = "php",              fn = find_views },
     { pattern = "View::make%(",  tpl = "View::make('%s')",         ft = "php",              fn = find_views },
     { pattern = "view%(",        tpl = "view('%s')",               ft = "php",              fn = find_views },
@@ -332,6 +335,7 @@ M.get_keyword_pattern = function()
     "<livewire:",
   }
   local functions_keywords = {
+    "@component",
     "@extends",
     "@include",
     "@livewire",
