@@ -43,7 +43,7 @@ function source:get_completions(ctx, callback)
 
   local full_input = string.sub(line_until_cursor, space_pos):gsub("%s+", "")
   local input = utils.extract_inner_function(full_input)
-  local _, names = utils.get_view_names(input, source.opts.close_tag_on_complete)
+  local _, names = utils.get_view_names(input, false)
   local items = {}
 
   --- @type lsp.CompletionItem[]
@@ -96,8 +96,6 @@ function source:get_completions(ctx, callback)
     }
     table.insert(items, item)
   end
-
-  vim.notify(vim.inspect(items))
 
   -- The callback _MUST_ be called at least once. The first time it's called,
   -- blink.cmp will show the results in the completion menu. Subsequent calls
