@@ -496,4 +496,25 @@ M.kebab_to_pascal = function(input)
   return text
 end
 
+--- Checks if the cursor is inside an inner function
+--- @param input string<lsp.CompletionItem>
+--- @return string
+M.extract_inner_function = function(input)
+  -- Find the last occurrence of any of our targeted functions
+  local last_func_start = 0
+  local functions_to_check = { "route", "to_route", "view", "View::make", "Route::view" }
+
+  for _, func in ipairs(functions_to_check) do
+    local pos = input:find(func .. "%(", last_func_start)
+    if pos and pos > last_func_start then
+      last_func_start = pos
+    end
+  end
+
+  if last_func_start > 0 then
+    return input:sub(last_func_start)
+  end
+  return input
+end
+
 return M
