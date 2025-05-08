@@ -54,7 +54,8 @@ From Controllers and Routes                              *blade-nav-controllers*
 blade-nav.nvim offers the following features:
 
 - Utilizes the `gf` (goto file) command for navigation.
-- Provides a custom source for nvim-cmp for component selection.
+- Provides a custom source for nvim-cmp, coq and blink.cmp for component
+  selection.
 
 ==============================================================================
 4. Usage                                                       *blade-nav-usage*
@@ -68,8 +69,8 @@ blade-nav.nvim offers the following features:
     - If neither exists, it presents three options: open the view, open the
       class, or run an artisan command to create the component.
 
-4.2 To navigate using the custom source** with nvim-cmp (Requires nvim-cmp
-to be installed and configured), write either:
+4.2 To navigate using the custom source** with nvim-cmp, coq or blik.cmp
+(Requires one of those to be installed and configured), write either:
 
   - `@extends`
   - `@include`
@@ -84,8 +85,35 @@ while you write.
 ==============================================================================
 5. Configuration                                       *blade-nav-configuration*
 
-No additional configuration is required. The plugin works out-of-the-box with
-the default `gf` command.
+If you use nvim-cmp or coq no additional configuration is required. The plugin
+works out-of-the-box with the default `gf` command.
+>
+  require("blade-nav").setup({
+    -- This applies for nvim-cmp and coq, for blink refer to the configuration
+    -- of this plugin
+    cmp_close_tag = true, -- default: true
+  })
+<
+If you use blink.cmp you need to configure the plugin as a source provider.
+>
+  require('blink.cmp').setup({
+    sources = {
+      -- Add 'blade-nav' to the default list
+      default = { 'lsp', 'buffer', 'snippets', 'path', 'blade-nav' },
+
+      providers = {
+        ['blade-nav'] = {
+          module = 'blade-nav.blink',
+          opts = {
+            close_tag_on_complete = true, -- default: true, 
+          },
+        },
+      }
+    }
+  })
+<
+For completion to play nice with autopairs, you can set the
+`close_tag_on_complete` to false, blade-nav will not close the tag on complete.
 
 ==============================================================================
 6. Example                                                    *blade-nav-example*
