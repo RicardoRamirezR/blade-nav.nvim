@@ -1,12 +1,9 @@
 # blade-nav.nvim
 Navigating Blade views, components, routes and configs within Laravel projects
 
-`blade-nav.nvim` is a Neovim plugin designed to enhance navigation within 
-Laravel projects. It allows quick access to Blade views and their corresponding
-classes, enables navigation to the controller associated with a route name, and
-to configuration files.
-This plugin simplifies moving between controllers, routes, configuration files,
-Blade views, and components in Laravel applications.
+`blade-nav.nvim` is a Neovim plugin designed to enhance navigation within Laravel projects.
+It allows quick access to Blade views and their corresponding classes, enables navigation to the controller associated with a route name, and to configuration files.
+This plugin simplifies moving between controllers, routes, configuration files, Blade views, and components in Laravel applications.
 
 <p align="center">
   <a href="https://github.com/ricardoramirezr/blade-nav.nvim/releases">
@@ -46,7 +43,8 @@ Open Blade views from controller or route definitions like
 - `view('name')`
 
 ### From any PHP or Blade file:
-- Open the controller associated with the route name: `route('name')` or `to_route('name')`
+- Open the controller associated with the route name:
+  `route('name')` or `to_route('name')`
 - Open configuration files using `config('file.key')`
 
 ## Features
@@ -74,6 +72,7 @@ call plug#begin()
     Plug 'ricardoramirezr/blade-nav.nvim', {'for': ['blade', 'php']}
 call plug#end()
 lua << EOF
+    -- This applies for nvim-cmp and coq, for blink refer to the configuration of this plugin
     require("blade-nav").setup({
       cmp_close_tag = true, -- default: true
     })
@@ -91,6 +90,7 @@ vim.call('plug#begin')
     Plug('ricardoramirezr/blade-nav.nvim', { ['for'] = { 'blade', 'php' } })
 vim.call('plug#end')
 require("blade-nav").setup({
+  -- This applies for nvim-cmp and coq, for blink refer to the configuration of this plugin
   cmp_close_tag = true, -- default: true
 })
 ```
@@ -138,15 +138,12 @@ use {
 1. **To navigate to a Blade view or its corresponding class**:
 
   - Place the cursor over the file name and use the `gf` command.
-    - If the component view exists but there is no corresponding class, it 
-    opens the view file.
+    - If the component view exists but there is no corresponding class, it opens the view file.
     - If the class exists but not its view, the class is opened.
-    - If neither exists and is a Livewire component, it presents the option to
-    create the component using `php artisan make:livewire`.
-    - If neither exists and is a Blade component, it can present two or three
-    options, depending on the component type. The options are, create the view
-    component and create the component via `php artisan make:component`. A
-    third option will be presented if you want to create an Anonymous Index Component.
+    - If neither exists and is a Livewire component, it presents the option to create the component using `php artisan make:livewire`.
+    - If neither exists and is a Blade component, it can present two or three options, depending on the component type.
+      The options are, create the view component and create the component via `php artisan make:component`.
+      A third option will be presented if you want to create an Anonymous Index Component.
 
     > If the file does not exist and is in a subfolder that does not exist yet,
     > you should create the directory, it can be done writing the file using 
@@ -175,26 +172,21 @@ use {
     - `route('`
     - `to_route('`
 
-    And the list of files will appear, and with the magic of completion the
-    list is filtered while you write. 
+    And the list of files will appear, and with the magic of completion the list is filtered while you write. 
 
 ## Configuration
 
-Make sure you have installed one of the following
+If you are using `nvim-cmp` or `coq` there is no additional configuration required.
+The plugin works out-of-the-box with the default `gf` command.
 
 - [cmp](https://github.com/hrsh7th/nvim-cmp)
   - `cmp-config.performance.max_view_entries`
 - [coq](https://github.com/ms-jpq/coq_nvim)
   - `coq_settings.match.max_results`
-
-If you are using `nvim-cmp` or `coq` there is no additional configuration required.
-The plugin works out-of-the-box with the default `gf` command.
-
 - [blink.cmp](https://github.com/Saghen/blink.cmp/)
   - `completion.list.max_items`
 
-If you are using `blink.cmp`, you will need to configure the source provider, here is an 
-example, but you may want to look to the docs for an advanced configuration.
+If you are using `blink.cmp`, you will need to configure the source provider, here is an example, but you may want to look to the docs for an advanced configuration.
 
 ```lua
 require('blink.cmp').setup({
@@ -214,19 +206,15 @@ require('blink.cmp').setup({
 })
 ```
 
-For completion to play nice with autopairs, you can set the
-`close_tag_on_complete` to false, blade-nav will not close the tag on complete.
+For completion to play nice with autopairs, you can set the `close_tag_on_complete` to false, blade-nav will not close the tag on complete.
 
 ```lua
   close_tag_on_complete = false, -- default: true
 ```
 
-For packages that have Blade components, you should run the Ex command
-`BladeNavInstallArtisanCommand` to install the artisan command.
+For packages that have Blade components, you should run the Ex command `BladeNavInstallArtisanCommand` to install the artisan command.
 
-If you want `blade-nav` to search in other paths when using `gf` on a Laravel
-component, you can specify this by enabling the `exrc` option and adding to one
-of the supported files, i.e.:
+If you want `blade-nav` to search in other paths when using `gf` on a Laravel component, you can specify this by enabling the `exrc` option and adding to one of the supported files, i.e.:
 
 ```lua
 vim.g.blade_nav = {
@@ -274,9 +262,9 @@ cmp.setup({
 ## Customization with blink.cmp
 
 If you want to add an icon to blade-nav completion items in blink, you can configure it through blink.cmp's formatting options.
-[Completion menu drawing](https://cmp.saghen.dev/recipes.html#completion-menu-drawing)
+[Completion menu drawing](https://cmp.saghen.dev/recipes.html#completion-menu-drawing)
 
-You may want to see the recipes for an advanced customization using [`nvim-web-devicons` + `lspkind`](https://cmp.saghen.dev/recipes.html#nvim-web-devicons-lspkind)
+You may want to see the recipes for an advanced customization using [`nvim-web-devicons` + `lspkind`](https://cmp.saghen.dev/recipes.html#nvim-web-devicons-lspkind)
 
 ```lua
 completion = {
@@ -321,7 +309,8 @@ Feel free to submit issues or pull requests to enhance the functionality of this
 
 ## License
 
-This plugin is open-source and distributed under the MIT License. See the LICENSE file for more details.
+This plugin is open-source and distributed under the MIT License.
+See the LICENSE file for more details.
 
 ## Acknowledgments
 
