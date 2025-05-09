@@ -16,6 +16,14 @@ M.explode = function(delimiter, text)
   return result
 end
 
+M.log = function(message)
+  local info = debug.getinfo(2, "Sl")             -- Get caller's info (stack level 2)
+  local file_path = info.source:sub(2)            -- Remove '@' from source
+  file_path = vim.fn.fnamemodify(file_path, ":t") -- Resolve to full path
+  local line_number = info.currentline
+  print(string.format("%s:%d: %s", file_path, line_number, vim.inspect(message)))
+end
+
 --- Checks if command exists
 --- @param name string
 --- @return boolean

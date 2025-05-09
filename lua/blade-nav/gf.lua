@@ -107,6 +107,25 @@ local function find_fn_and_name(lang, ts_node, query_string, content)
     findings.name = process_match(matches[2])
   end
 
+  if findings.fn ~= nil then
+    return findings, findings.fn ~= nil
+  end
+
+  for pattern, match, metadata in query:iter_matches(ts_node, 0, 0, -1) do
+    for id, nodes in pairs(match) do
+      local name = query.captures[id]
+      for _, node in ipairs(nodes) do
+        local node_type = node:type()
+        local node_text = ts.get_node_text(node, content)
+        if node_type == "name" then
+          findings.fn = node_text
+        elseif node_type == "string_content" then
+          findings.name = node_text
+        end
+      end
+    end
+  end
+
   return findings, findings.fn ~= nil
 end
 
@@ -658,7 +677,6 @@ end
 
 function M.gf()
   local prefix, component_name = get_component_name_and_prefix()
-
   if not prefix or not component_name then
     return gf_native()
   end
