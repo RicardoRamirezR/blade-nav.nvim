@@ -369,25 +369,38 @@ end
 --- Get root and language
 --- @return table|nil, string|nil
 M.get_root_and_lang = function()
-  local parsers = require("nvim-treesitter.parsers")
-  if not parsers then
-    return nil, nil
+  local root, lang
+
+  local has_treesitter, ts = pcall(require, "vim.treesitter")
+  if has_treesitter then
+    local ok, parser = pcall(ts.get_parser)
+    if ok and parser then
+      local trees = parser:parse()
+      if trees and trees[1] then
+        root = trees[1]:root()
+        lang = parser:lang()
+      end
+    end
   end
 
-  local parser = parsers.get_parser()
-
-  if not parser then
-    return nil, nil
+  if not root or not lang then
+    local has_parsers, parsers = pcall(require, "nvim-treesitter.parsers")
+    if has_parsers and parsers and parsers.get_parser then
+      local parser = parsers.get_parser()
+      if parser then
+        local tree = parser:parse()[1]
+        if tree then
+          root = tree:root()
+          lang = parser:lang()
+        end
+      end
+    end
   end
 
-  local tree = parser:parse()[1]
-
-  if not tree then
+  -- Check if we got valid results
+  if not root or not lang then
     return nil, nil
   end
-
-  local root = tree:root()
-  local lang = parser:lang()
 
   if not M.in_table(lang, { "blade", "php" }) then
     vim.notify("Info: works only on PHP.")

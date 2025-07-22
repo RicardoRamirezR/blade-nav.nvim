@@ -257,8 +257,22 @@ local function seek_for_function_and_name()
     return {}, false
   end
 
-  local ts_utils = require("nvim-treesitter.ts_utils")
-  local current_node = ts_utils.get_node_at_cursor(0, true)
+  local current_node
+
+  local has_treesitter, ts = pcall(require, "vim.treesitter")
+  if has_treesitter then
+    local ok, node = pcall(ts.get_node)
+    if ok and node then
+      current_node = node
+    end
+  end
+
+  if not current_node then
+    local has_ts_utils, ts_utils = pcall(require, "nvim-treesitter.ts_utils")
+    if has_ts_utils and ts_utils and ts_utils.get_node_at_cursor then
+      current_node = ts_utils.get_node_at_cursor(0, true)
+    end
+  end
 
   if not current_node then
     return {}, false
