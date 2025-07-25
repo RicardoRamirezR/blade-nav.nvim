@@ -1,0 +1,116 @@
+-- File: lua/blade-nav/context.lua
+-- Module to create and manage the context object for target resolution.
+
+local M = {}
+
+-- --- Creates a rich context object for the current cursor position.
+-- --- @return table The context object.
+M.create_context = function()
+  local cursor_row, cursor_col = unpack(vim.api.nvim_win_get_cursor(0))
+
+  local context = {
+    -- Basic information
+    line = vim.api.nvim_get_current_line(),
+    cursor_row = cursor_row, -- Assign the local variables
+    cursor_col = cursor_col,
+    buffer = 0,              -- Explicitly use current buffer (0)
+    filetype = "",           -- Initialize
+
+    -- Derived information
+    cursor_row_1 = 0, -- 1-based row
+    cursor_col_1 = 0, -- 1-based column
+    char_under_cursor = "",
+
+    -- Treesitter information (if available and safely accessible)
+    ts_node = nil,
+    ts_lang = nil,
+    ts_parser = nil,
+    ts_root = nil,
+  }
+
+  -- Safely get filetype
+  local ok, filetype = pcall(vim.api.nvim_buf_get_option, context.buffer, "filetype")
+  if ok then
+    context.filetype = filetype
+  else
+    vim.notify("BladeNav: Could not get filetype. " .. tostring(filetype), vim.log.levels.DEBUG)
+  end
+
+  context.cursor_row_1 = context.cursor_row + 1 -- 1-based indexing often expected
+  context.cursor_col_1 = context.cursor_col + 1
+  if context.line and context.cursor_col_1 <= #context.line then
+    context.char_under_cursor = context.line:sub(context.cursor_col_1, context.cursor_col_1)
+  end
+
+  -- Populate Treesitter information DEFENSIVELY
+  local ts_ok, ts = pcall(require, "vim.treesitter")
+  if ts_ok then
+    -- Check if we are in a valid window/buffer state before accessing Treesitter
+    local win_ok, win_id = pcall(vim.api.nvim_get_current_win)
+    if win_ok and win_id and win_id > 0 then -- Basic validity check
+      local parser_ok, parser = pcall(ts.get_parser, context.buffer)
+      if parser_ok and parser then
+        context.ts_parser = parser
+        context.ts_lang = parser:lang()
+        local trees = parser:parse()
+        if trees and trees[1] then
+          context.ts_root = trees[1]:root()
+
+          -- Safely get node at cursor using nvim-treesitter.ts_utils
+          local ts_utils_ok, ts_utils = pcall(require, "nvim-treesitter.ts_utils")
+          if ts_utils_ok and ts_utils.get_node_at_cursor then
+            -- Use pcall specifically for get_node_at_cursor
+            local node_ok, node_or_err = pcall(ts_utils.get_node_at_cursor, context.buffer, true) -- cross_line=true
+            if node_ok and node_or_err then
+              context.ts_node = node_or_err
+            elseif not node_ok then
+              -- This is the specific error we are trying to catch
+              vim.notify(
+                "BladeNav: Failed to get TS node at cursor (nvim-treesitter error). Details: " .. tostring(node_or_err),
+                vim.log.levels.WARN
+              )
+              -- context.ts_node remains nil, handlers should check for this
+            end
+          else
+            -- Fallback if nvim-treesitter.ts_utils is not available or load failed
+            if ts_utils_ok then -- Module loaded, function missing
+              vim.notify("BladeNav: nvim-treesitter.ts_utils.get_node_at_cursor not found.", vim.log.levels.WARN)
+            else                -- Module failed to load
+              vim.notify(
+                "BladeNav: Failed to load nvim-treesitter.ts_utils. Details: " .. tostring(ts_utils),
+                vim.log.levels.WARN
+              )
+            end
+            -- Direct attempt using vim.treesitter.get_node (less precise cursor handling)
+            local direct_node_ok, direct_node =
+                pcall(ts.get_node, context.buffer, context.cursor_row, context.cursor_col, { ignore_injections = false })
+            if direct_node_ok and direct_node then
+              context.ts_node = direct_node
+            elseif not direct_node_ok then
+              vim.notify(
+                "BladeNav: Fallback TS node retrieval also failed. Details: " .. tostring(direct_node),
+                vim.log.levels.DEBUG
+              )
+            end
+          end
+        else
+          vim.notify("BladeNav: TS parser parsed no trees.", vim.log.levels.DEBUG)
+        end
+      else
+        vim.notify("BladeNav: Failed to get TS parser. Details: " .. tostring(parser), vim.log.levels.DEBUG)
+      end
+    else
+      -- Window state seems invalid, don't attempt TS access
+      vim.notify("BladeNav: Invalid window state for TS access. win_id: " .. tostring(win_id), vim.log.levels.DEBUG)
+    end
+  else
+    -- Treesitter not available or failed to load
+    vim.notify("BladeNav: Treesitter not available or failed to load. Details: " .. tostring(ts), vim.log.levels.DEBUG)
+  end
+
+  -- Add any other relevant project-specific or plugin-specific context here
+
+  return context
+end
+
+return M

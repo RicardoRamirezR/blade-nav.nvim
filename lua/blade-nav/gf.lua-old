@@ -1,0 +1,83 @@
+local targets = require("blade-nav.targets")
+local context_creator = require("blade-nav.context")
+
+local M = {}
+local gf_mapping
+local registered = false
+
+--- Get keymap (simplified)
+local function get_keymap(mode, lhs)
+  local keymaps = vim.api.nvim_get_keymap(mode)
+  for _, keymap in ipairs(keymaps) do
+    if keymap.lhs == lhs then
+      return keymap
+    end
+  end
+end
+
+--- Run native gf
+local function gf_native()
+  if gf_mapping then
+    local rhs = vim.api.nvim_replace_termcodes(gf_mapping.rhs, true, true, true)
+    vim.api.nvim_feedkeys(rhs, "n", false)
+  else
+    vim.fn.execute("normal! gf")
+  end
+end
+
+function M.gf()
+  local context = context_creator.create_context()
+  local resolved = targets.resolve_target(context)
+
+  if not resolved then
+    gf_native()
+  end
+end
+
+-- Setup function
+M.setup = function(user_config) -- Accept config from init.lua
+  if registered then
+    return
+  end
+  registered = true
+
+  -- Load target handlers dynamically, respecting configuration
+  targets.load_handlers() -- Load all built-ins first
+
+  -- Then, disable handlers based on config
+  if user_config and user_config.handlers then
+    for handler_name, enabled in pairs(user_config.handlers) do
+      if enabled == false and targets._handlers[handler_name] then
+        targets._handlers[handler_name] = nil
+        for i, name in ipairs(targets._handler_order) do
+          if name == handler_name then
+            table.remove(targets._handler_order, i)
+            break
+          end
+        end
+      end
+    end
+  end
+
+  gf_mapping = get_keymap("n", "gf")
+
+  vim.api.nvim_create_autocmd("BufWinEnter", {
+    group = vim.api.nvim_create_augroup("blade-nav-filetype-detection", { clear = true }),
+    callback = function(args)
+      local filetype = vim.bo[args.buf].filetype
+      if filetype == "php" or filetype == "blade" then
+        pcall(vim.keymap.del, "n", "gf", { buffer = args.buf })
+        vim.keymap.set("n", "gf", function()
+          M.gf()
+        end, {
+          buffer = args.buf,
+          noremap = true,
+          silent = true,
+          desc = "BladeNav: Open file under cursor (Enhanced)",
+        })
+      end
+    end,
+  })
+end
+
+return M
