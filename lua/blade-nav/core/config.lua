@@ -5,6 +5,28 @@
 local M = {}
 local cache = {} -- Simple cache for the merged config
 
+local schema = {
+  enable = "boolean",
+  cache_timeout = "number",
+  debug = "boolean",
+  jsconfig_path = "string",
+  laravel_components_paths = "table",
+  handlers = "table",
+  integrations = "table",
+}
+
+local function validate(config)
+  for key, expected in pairs(schema) do
+    local val = config[key]
+    if val ~= nil and type(val) ~= expected then
+      vim.notify(
+        string.format("[BladeNav] Invalid config: '%s' expected %s but got %s", key, expected, type(val)),
+        vim.log.levels.WARN
+      )
+    end
+  end
+end
+
 -- @class BladeNavConfig
 -- @field cache_timeout integer Timeout for cached data in milliseconds (default: 5000)
 -- @field debug boolean Enable debug logging (default: false)
@@ -134,6 +156,7 @@ function M.setup(user_config)
   end
   -- Use the new merging function that includes legacy support
   cache.merged = merge_config_with_legacy(user_config)
+  validate(cache.merged)
 end
 
 --- Get the current configuration.

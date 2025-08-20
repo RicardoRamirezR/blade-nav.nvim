@@ -8,6 +8,7 @@ local M = {}
 M._handlers = {}        -- Loaded handler modules
 M._handler_order = {}   -- Order of handler names
 M._handler_modules = {} -- Map name → module path for lazy require
+M._failed_handlers = {} -- Cache of handlers that failed to load
 
 --- Register a target handler after it's required.
 --- @param name string
@@ -30,6 +31,9 @@ local function ensure_handler_loaded(name)
   if M._handlers[name] then
     return true
   end
+  if M._failed_handlers[name] then
+    return false -- Skip known bad handler
+  end
   local module_path = M._handler_modules[name]
   if not module_path then
     return false
@@ -40,6 +44,7 @@ local function ensure_handler_loaded(name)
     return true
   else
     log.error("Failed to load target handler '%s' (%s): %s", name, module_path, tostring(mod))
+    M._failed_handlers[name] = true
     return false
   end
 end
@@ -75,6 +80,12 @@ end
 --- @param config table
 function M.load_handlers(handler_module_base, handler_dir_path, config)
   handler_module_base = handler_module_base or "blade-nav.targets"
+
+  M._handlers = {}
+  M._handler_order = {}
+  M._handler_modules = {}
+  M._failed_handlers = M._failed_handlers or {}
+
   if not handler_dir_path then
     local init_script_path = debug.getinfo(1, "S").source:sub(2)
     handler_dir_path = vim.fn.fnamemodify(init_script_path, ":p:h")
@@ -84,14 +95,15 @@ function M.load_handlers(handler_module_base, handler_dir_path, config)
   local discovered = discover_handlers(handler_dir_path)
   for _, name in ipairs(discovered) do
     if config.handlers and config.handlers[name] == false then
-      log.info("Skipping handler '%s' (disabled in config)", name)
+      log.debug("Skipping handler '%s' (disabled in config)", name)
     else
       local module_path = handler_module_base .. "." .. name
       M._handler_modules[name] = module_path
       table.insert(M._handler_order, name)
     end
   end
-  log.info("Registered %d handler names (lazy)", #M._handler_order)
+
+  log.info("Registered %d handlers (lazy)", #M._handler_order)
 end
 
 --- Show choices with Telescope if available, otherwise vim.ui.select.
