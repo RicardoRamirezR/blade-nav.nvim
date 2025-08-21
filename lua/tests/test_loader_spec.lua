@@ -13,6 +13,11 @@ describe("BladeNav loader", function()
     -- Clear cached modules
     package.loaded["blade-nav"] = nil
     package.loaded["blade-nav.loader"] = nil
+    package.loaded["blade-nav.utils.laravel"] = {
+      is_laravel_project = function()
+        return true
+      end,
+    }
 
     -- Keep original notify
     orig_notify = vim.notify
@@ -26,6 +31,11 @@ describe("BladeNav loader", function()
   end)
 
   it("bails out if vim.g.blade_nav.enable == false", function()
+    package.loaded["blade-nav.utils.laravel"] = {
+      is_laravel_project = function()
+        return false
+      end,
+    }
     vim.g.blade_nav = { enable = false }
     loader.ftplugin_loader()
     assert.is_nil(vim.g.loaded_blade_nav)
@@ -95,5 +105,39 @@ describe("BladeNav loader", function()
     loader.ftplugin_loader()
 
     assert.stub(blade_nav.setup).was_not_called()
+  end)
+
+  it("bails out if not a Laravel project (unless force_enable)", function()
+    package.loaded["blade-nav.utils.laravel"] = {
+      is_laravel_project = function()
+        return false
+      end,
+    }
+    local setup_called = false
+    package.loaded["blade-nav"] = {
+      setup = function()
+        setup_called = true
+      end,
+    }
+    loader.ftplugin_loader()
+    assert.is_true(vim.g.loaded_blade_nav)
+    assert.is_false(setup_called)
+  end)
+
+  it("runs when force_enable=true even if not Laravel", function()
+    package.loaded["blade-nav.utils.laravel"] = {
+      is_laravel_project = function()
+        return false
+      end,
+    }
+    vim.g.blade_nav = { force_enable = true }
+    local setup_called = false
+    package.loaded["blade-nav"] = {
+      setup = function()
+        setup_called = true
+      end,
+    }
+    loader.ftplugin_loader()
+    assert.is_true(setup_called)
   end)
 end)

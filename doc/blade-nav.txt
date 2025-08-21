@@ -1,4 +1,6 @@
-# blade-nav.nvim
+*blade-nav.txt*	BladeNav.nvim Documentation
+
+blade-nav.nvim
 Navigating Blade views, components, routes and configs within Laravel projects
 
 `blade-nav.nvim` is a Neovim plugin designed to enhance navigation within Laravel projects.
@@ -11,11 +13,11 @@ This plugin simplifies moving between controllers, routes, configuration files, 
   </a>
 </p>
 
-## In a Blade view
+In a Blade view
 
 ![x-livewire](https://github.com/RicardoRamirezR/blade-nav.nvim/assets/6526545/8e10106f-d28e-40dc-b0df-c45f0f842980)
 
-## From Controller and Routes
+From Controller and Routes
 
 ![gf-view](https://github.com/RicardoRamirezR/blade-nav.nvim/assets/6526545/e6ddb3ec-829f-4055-b8d1-581635bfb18c)
 
@@ -25,23 +27,7 @@ This plugin simplifies moving between controllers, routes, configuration files, 
     </a>
 </p>
 
-## Setup
-
-```lua
-require("blade-nav").setup({
-  -- Auto-disable outside Laravel (default). Force with:
-  -- force_enable = true,
-})
-
-## Detection heuristics
-
-A project is considered "Laravel" if any of the following are true:
-- artisan file exists
-- routes/web.php exists
-- resources/views exists
-- composer.json requires laravel/framework or laravel/lumen-framework
-
-## Navigation
+Navigation
 
 ### From Blade View
 
@@ -63,7 +49,7 @@ Open Blade views from controller or route definitions like
   `route('name')` or `to_route('name')`
 - Open configuration files using `config('file.key')`
 
-## Features
+Features
 
 - Utilizes the `gf` (goto file) command for navigation.
 - Provides a custom source for [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) (requires installation and configuration) for component selection.
@@ -73,7 +59,7 @@ Open Blade views from controller or route definitions like
 - Has support for Filament components.
 - Provides support for additional paths for Laravel Blade components.
 
-## Installation
+Installation
 
 To get started with `blade-nav.nvim`, add the plugin to your `init.lua` or `init.vim` file:
 
@@ -149,7 +135,7 @@ use {
 }
 ```
 
-## Usage
+Usage
 
 1. **To navigate to a Blade view or its corresponding class**:
 
@@ -190,7 +176,7 @@ use {
 
     And the list of files will appear, and with the magic of completion the list is filtered while you write. 
 
-## Configuration
+Configuration
 
 If you are using `nvim-cmp` or `coq` there is no additional configuration required.
 The plugin works out-of-the-box with the default `gf` command.
@@ -250,7 +236,7 @@ vim.g.blade_nav = {
 
 See `:h VIMINIT`
 
-## Customization with nvim-cmp
+Customization with nvim-cmp
 
 If you want to add an icon to blade-nav completion items in cmp, you can configure it through nvim-cmp's formatting options:
 
@@ -275,7 +261,7 @@ cmp.setup({
 })
 ```
 
-## Customization with blink.cmp
+Customization with blink.cmp
 
 If you want to add an icon to blade-nav completion items in blink, you can configure it through blink.cmp's formatting options.
 [Completion menu drawing](https://cmp.saghen.dev/recipes.html#completion-menu-drawing)
@@ -315,19 +301,21 @@ completion = {
 }
 ```
 
-## Health
+Health
 
 To check the health of the plugin, run `:checkhealth blade-nav`.
 
-## Contributing
+Contributing
 
 Feel free to submit issues or pull requests to enhance the functionality of this plugin.
 
-## License
+License
 
 This plugin is open-source and distributed under the MIT License.
 See the LICENSE file for more details.
 
-## Acknowledgments
+Acknowledgments
 
 Special thanks to the Neovim and Laravel communities for their continuous support and contributions.
+
+vim:tw=78:ts=8:ft=help:norl:

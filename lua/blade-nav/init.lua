@@ -30,6 +30,14 @@ local M = {}
 --- It merges user options with defaults, loads handlers, and initializes integrations.
 --- @param opts? BladeNavConfig User-provided configuration options.
 function M.setup(opts)
+  vim.g.blade_nav = vim.tbl_extend("force", vim.g.blade_nav or {}, opts or {})
+
+  local laravel = require("blade-nav.utils.laravel")
+  if not vim.g.blade_nav.force_enable and not laravel.is_laravel_project() then
+    vim.g.blade_nav.enable = false
+    return
+  end
+
   -- 1. Load and merge user configuration with defaults
   -- This updates the global configuration state managed by core/config.lua
   config.setup(opts)               -- Pass defaults and user opts

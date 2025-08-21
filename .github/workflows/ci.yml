@@ -1,0 +1,51 @@
+---
+name: CI
+on:
+  push: { branches: [main, master, refactor] }
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: JohnnyMorganz/stylua-action@v4
+        with: { token: ${{ secrets.GITHUB_TOKEN }}, args: --check . }
+      - name: Luacheck
+        uses: lunarmodules/luacheck@v1
+        with: { args: . }
+
+  test:
+    strategy:
+      matrix:
+        neovim: [stable, nightly]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Neovim
+        uses: rhysd/action-setup-vim@v1
+        with: { neovim: true, version: ${{ matrix.neovim }} }
+      - name: Install deps
+        run: |
+          sudo apt-get update && sudo apt-get install -y ripgrep
+          git clone --depth=1 https://github.com/nvim-lua/plenary.nvim ~/.local/share/nvim/lazy/plenary.nvim
+          git clone --depth=1 https://github.com/nvim-treesitter/nvim-treesitter ~/.local/share/nvim/lazy/nvim-treesitter
+      - name: Run tests
+        run: |
+          nvim --headless -u tests/minimal_init.lua \
+            -c "PlenaryBustedDirectory lua/tests/ { minimal_init = 'tests/minimal_init.lua' }" \
+            -c "qa!"
+
+  help:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: kdheepak/panvimdoc@v3
+        with:
+          vimdoc: blade-nav
+          pandoc: false
+          toc: true
+          description: "Navigate Blade views, components, routes and configs within Laravel projects"
+      - name: Fail if doc changed
+        run: |
+          git diff --exit-code || (echo "::error::vimdoc out of date."; exit 1)
+

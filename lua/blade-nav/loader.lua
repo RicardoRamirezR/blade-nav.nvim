@@ -5,6 +5,16 @@ function M.ftplugin_loader()
     return
   end
 
+  -- Auto-disable if this is not a Laravel project, unless force_enable is set
+  local ok, laravel = pcall(require, "blade-nav.utils.laravel")
+  if ok then
+    local cfg = vim.g.blade_nav or {}
+    if not cfg.force_enable and not laravel.is_laravel_project() then
+      vim.g.loaded_blade_nav = true -- mark as loaded to prevent retries
+      return
+    end
+  end
+
   if not vim.g.loaded_blade_nav then
     local ok, blade_nav = pcall(require, "blade-nav")
     if ok and blade_nav then

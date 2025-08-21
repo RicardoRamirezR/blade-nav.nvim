@@ -539,6 +539,39 @@ M.get_view_names = function(input, not_include_closing_tag)
   return index, items
 end
 
+--- Detect if current working directory looks like a Laravel project.
+--- Heuristics: artisan, or composer.json with laravel/framework|lumen,
+--- or typical Laravel paths.
+--- @param cwd string|nil
+--- @return boolean
+function M.is_laravel_project(cwd)
+  cwd = cwd or (uv and uv.cwd()) or "."
+  local function P(p)
+    return (cwd .. "/" .. p)
+  end
+  if fs.path_exists(P("artisan")) then
+    return true
+  end
+  if fs.path_exists(P("routes/web.php")) then
+    return true
+  end
+  if fs.path_exists(P("resources/views")) then
+    return true
+  end
+  if fs.path_exists(P("composer.json")) then
+    local contents = fs.read_file(P("composer.json"))
+    if contents then
+      local ok, data = pcall(vim.json.decode, contents)
+      if ok and data and data.require then
+        if data.require["laravel/framework"] or data.require["laravel/lumen-framework"] then
+          return true
+        end
+      end
+    end
+  end
+  return false
+end
+
 M.__test_build_route_map = build_route_map
 M.__test_invalidate_routes_cache = invalidate_routes_cache
 
