@@ -50,6 +50,24 @@ end
 local function find_components()
   return find_views_names("resources/views/components")
 end
+---
+--- Find all livewire views
+--- @return table
+local function find_livewire()
+  return find_views_names("resources/views/livewire")
+end
+
+-- Find all routes
+-- @return table
+local function find_routes()
+  return M.get_route_names()
+end
+
+--- Find all views excliding livewire abd Laravel components
+--- @return table
+local function find_views()
+  return find_views_names("resources/views", { "resources/views/livewire", "resources/views/components" })
+end
 
 --- Get PSR-4 mappings from composer.json.
 --- @return table<string, string>|nil Map of namespace to path, or nil on error
@@ -180,12 +198,35 @@ local function build_route_map(routes)
   return map
 end
 
+local function prime_routes(routes)
+  local all_out, ok_all = cmd.execute_silent({
+    "php",
+    "artisan",
+    "route:list",
+    "--json",
+    "--columns=name,action",
+  })
+
+  local primed_map
+  if ok_all then
+    local ok_parse, all_routes = pcall(vim.json.decode, all_out)
+    if ok_parse and type(all_routes) == "table" then
+      primed_map = build_route_map(all_routes)
+      cache.set("route_list:primed", primed_map)
+      log.debug("Primed cache with %d routes", vim.tbl_count(primed_map))
+    end
+  end
+
+  return primed_map
+end
+
 --- Get route list from `php artisan route:list --json`.
---- @param route_name string Route name
+--- @param route_name string|nil Route name
 --- @return table|nil List of route objects, or nil on error
 function M.get_route_list(route_name)
   local primed_routes = cache.get("route_list:primed", math.huge)
   if primed_routes then
+    log.debug("Cache primed")
     if route_name then
       if primed_routes[route_name] then
         return { [route_name] = primed_routes[route_name] }
@@ -194,6 +235,10 @@ function M.get_route_list(route_name)
       end
     end
     return primed_routes
+  end
+
+  if not route then
+    return prime_routes()
   end
 
   if not fs.command_exists("php") then
@@ -225,28 +270,10 @@ function M.get_route_list(route_name)
     route_map = build_route_map(routes)
   end
 
-  if not primed then
-    primed = true
-    vim.schedule(function()
-      log.debug("Priming global route cache in background...")
-      local all_out, ok_all = cmd.execute_silent({
-        "php",
-        "artisan",
-        "route:list",
-        "--json",
-        "--columns=name,action",
-      })
-
-      if ok_all then
-        local ok_parse, all_routes = pcall(vim.json.decode, all_out)
-        if ok_parse and type(all_routes) == "table" then
-          local primed_map = build_route_map(all_routes)
-          cache.set("route_list:primed", primed_map)
-          log.debug("Primed cache with %d routes", vim.tbl_count(primed_map))
-        end
-      end
-    end)
-  end
+  vim.schedule(function()
+    log.debug("Priming global route cache in background...")
+    prime_routes()
+  end)
 
   return route_map
 end
@@ -395,16 +422,24 @@ end
 --- Get all route names from the route list.
 --- @return table List of route names.
 function M.get_route_names()
+  local cache_key = "route_list:route_name"
+  local cached = cache.get(cache_key, math.huge)
+  if cached then
+    return cached
+  end
+
   local routes = M.get_route_list()
   local route_names = {}
+
   if routes and type(routes) == "table" then
-    for _, route in ipairs(routes) do
-      if route.name and route.name ~= vim.NIL then
-        table.insert(route_names, route.name)
+    for route_name, _ in pairs(routes) do
+      if route_name and route_name ~= vim.NIL then
+        table.insert(route_names, route_name)
       end
     end
   end
-  return route_names
+
+  return cache.set(cache_key, route_names)
 end
 
 --- Check if the BladeNav artisan command exists.
@@ -517,7 +552,7 @@ M.get_view_names = function(input, not_include_closing_tag)
   local index
   local items = {}
   for i, p in ipairs(patterns) do
-    if input:match(p.pattern) and tbl.contains(vim.bo.filetype, p.ft) then
+    if input:match(p.pattern) and tbl.contains(p.ft, vim.bo.filetype) then
       local names = p.fn()
       for _, name in ipairs(names) do
         if name then

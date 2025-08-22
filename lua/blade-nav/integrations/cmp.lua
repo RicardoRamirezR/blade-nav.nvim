@@ -3,9 +3,10 @@
 -- Based on structure from new-version.txt and working-version.txt cmp.lua
 
 local log = require("blade-nav.utils.log")
-local utils = require("blade-nav.utils")             -- Main utils module
-local table_utils = require("blade-nav.utils.table") -- Require the table utilities module
+local utils = require("blade-nav.utils")     -- Main utils module
+local tbl = require("blade-nav.utils.table") -- Require the table utilities module
 local laravel = require("blade-nav.utils.laravel")
+local string_utils = require("blade-nav.utils.string")
 -- local config_module = require("blade-nav.core.config") -- If you move config/get_keyword_pattern there
 
 local M = {}
@@ -46,7 +47,7 @@ function M.setup(opts)
 
   source.is_available = function()
     local buf_ft = vim.api.nvim_buf_get_option(0, "filetype")
-    return table_utils.contains({ "blade", "php" }, buf_ft)
+    return tbl.contains({ "blade", "php" }, buf_ft)
   end
 
   --- Defines the keyword pattern for this source.
@@ -56,7 +57,7 @@ function M.setup(opts)
     -- Use your existing, well-defined keyword pattern function
     -- This pattern should already be suitable for triggering completion
     -- in the right contexts (after @include(, <x-, etc.).
-    return utils.get_keyword_pattern() -- This returns the combined pattern string
+    return string_utils.get_keyword_pattern() -- This returns the combined pattern string
   end
 
   --- Main completion function for nvim-cmp.

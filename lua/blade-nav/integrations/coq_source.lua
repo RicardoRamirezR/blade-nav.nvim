@@ -2,6 +2,7 @@
 -- This file defines the actual coq source.
 local utils = require("blade-nav.utils")
 local log = require("blade-nav.utils.log")
+local tbl = require("blade-nav.utils.table")
 
 -- `COQsources` is a global registry of sources for coq.nvim
 _G.COQsources = _G.COQsources or {}
@@ -11,7 +12,7 @@ _G.COQsources["blade-nav"] = {
   name = "blade-nav",
   fn = function(_, callback)
     -- Check filetype
-    if not utils.table.contains(vim.bo.filetype, { "blade", "php" }) then
+    if not tbl.contains({ "blade", "php" }, vim.bo.filetype) then
       callback()
       return
     end

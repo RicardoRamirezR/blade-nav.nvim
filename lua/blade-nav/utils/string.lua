@@ -74,7 +74,7 @@ function M.get_keyword_pattern()
 
   if vim.g.blade_nav and vim.g.blade_nav.include_routes == false then
     functions_keywords = vim.tbl_filter(function(keyword)
-      return not tbl.contains(keyword, { "route", "to_route" })
+      return not tbl.contains({ "route", "to_route" }, keyword)
     end, functions_keywords)
   end
 
