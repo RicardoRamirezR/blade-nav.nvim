@@ -29,12 +29,12 @@ local function find_views_names(path, exclude_dirs)
   end
 
   local result = fs.find_files(path, "blade.php", exclude_dirs)
-  if not result or result == "" then
+  if not result then
     return {}
   end
 
   local views = {}
-  for filename in result:gmatch("[^\r\n ]+") do
+  for _, filename in ipairs(result) do
     local view = filename:match(path .. "(.+)")
     if view then
       view = view:gsub("^/", ""):gsub("%.blade%.php$", ""):gsub("/", ".")
@@ -100,13 +100,13 @@ function M.get_psr4_mappings()
 end
 
 -- Invalidate *all* cached routes
-local function invalidate_routes_cache()
+function M.invalidate_routes_cache()
   log.debug("Invalidating all cached routes")
   cache.clear_prefix("route_list:") -- needs support in cache module
 end
 
 local debounced_invalidate = debounce(function()
-  invalidate_routes_cache()
+  M.invalidate_routes_cache()
 end, 200)
 
 -- Watch the bootstrap/cache dir and attach to any routes-v*.php file
@@ -207,7 +207,7 @@ local function prime_routes(routes)
     "--columns=name,action",
   })
 
-  local primed_map
+  local primed_map = {}
   if ok_all then
     local ok_parse, all_routes = pcall(vim.json.decode, all_out)
     if ok_parse and type(all_routes) == "table" then
@@ -306,8 +306,8 @@ function M.get_blade_files()
   local files = {}
   for _, view_dir in ipairs(VIEW_DIRS) do
     local result = fs.find_files(view_dir, "blade.php")
-    if result and result ~= "" then
-      for file in result:gmatch("[^\r\n]+") do
+    if result then
+      for _, file in ipairs(result) do
         local relative_path = file:match(view_dir .. "(.*)%.blade%.php$")
         if relative_path then
           local normalized_name = relative_path:gsub("/", ".")
@@ -439,6 +439,8 @@ function M.get_route_names()
     end
   end
 
+  table.sort(route_names)
+
   return cache.set(cache_key, route_names)
 end
 
@@ -465,13 +467,13 @@ function M.get_root_dir()
     return cached
   end
 
-  local root_dir, _ = cmd.execute_silent({ "git", "rev-parse", "--show-toplevel" })
+  local root_dir, ok = cmd.execute_silent({ "git", "rev-parse", "--show-toplevel" })
   root_dir = root_dir:gsub("[\r\n]+$", "") -- Trim trailing newlines
   if root_dir == "" then
     root_dir = vim.fn.getcwd()
   end
 
-  return cache.set(cache_key, root_dir)
+  return cache.set(cache_key, root_dir), ok
 end
 
 --- Get the PSR-4 application namespace.
@@ -516,20 +518,6 @@ function M.kebab_to_pascal(input)
   -- Capitalize first letter and letters after hyphens, remove hyphens
   local result = input:gsub("^%l", string.upper):gsub("%-(%w)", string.upper)
   return result
-end
-
---- Get view names from code (placeholder, logic should be in ts_utils or view handler).
---- This function is likely superseded by ts_utils.extract_keys_from_code.
---- @param line_text string
---- @param target_type string
---- @return table
-function M.get_view_names_from_code(line_text, target_type)
-  -- This is a placeholder. The actual logic for extracting view names
-  -- from code like Route::view('/', 'view.name') or view('view.name')
-  -- should reside in ts_utils.extract_keys_from_code or be called by the view handler.
-  -- Returning an empty table as it's not the primary way anymore.
-  log.debug("DEBUG (laravel.lua): get_view_names_from_code is a placeholder. Use ts_utils.extract_keys_from_code.")
-  return {}
 end
 
 --- Get all view names

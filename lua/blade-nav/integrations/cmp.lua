@@ -6,7 +6,7 @@ local log = require("blade-nav.utils.log")
 local utils = require("blade-nav.utils")     -- Main utils module
 local tbl = require("blade-nav.utils.table") -- Require the table utilities module
 local laravel = require("blade-nav.utils.laravel")
-local string_utils = require("blade-nav.utils.string")
+local str = require("blade-nav.utils.string")
 -- local config_module = require("blade-nav.core.config") -- If you move config/get_keyword_pattern there
 
 local M = {}
@@ -57,7 +57,7 @@ function M.setup(opts)
     -- Use your existing, well-defined keyword pattern function
     -- This pattern should already be suitable for triggering completion
     -- in the right contexts (after @include(, <x-, etc.).
-    return string_utils.get_keyword_pattern() -- This returns the combined pattern string
+    return str.get_keyword_pattern() -- This returns the combined pattern string
   end
 
   --- Main completion function for nvim-cmp.

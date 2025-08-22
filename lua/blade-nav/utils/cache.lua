@@ -1,8 +1,7 @@
 -- lua/blade-nav/utils/cache.lua
 local uv = vim.loop
--- Assuming config is in core now, adjust path if needed
-local config = require("blade-nav.core.config")
 local log = require("blade-nav.utils.log")
+local config = require("blade-nav.core.config")
 
 local M = {}
 local cache_store = {}
@@ -21,7 +20,7 @@ function M.get(key, ttl)
   ttl = ttl or cfg.cache_timeout or 5000
 
   if uv.now() - entry.timestamp > ttl then
-    cache_store[key] = nil -- Invalidate
+    cache_store[key] = nil
     log.debug("Cache entry expired: %s", key)
     return nil
   end

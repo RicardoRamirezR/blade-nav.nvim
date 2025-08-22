@@ -8,6 +8,7 @@ local blink_integration = require("blade-nav.integrations.blink")   -- Handles b
 local coq_integration = require("blade-nav.integrations.coq")       -- Handles coq.nvim integration
 local health_integration = require("blade-nav.integrations.health") -- Handles :checkhealth
 local targets = require("blade-nav.targets")                        -- Handles target handler loading/registration
+local commands = require("blade-nav.commands")
 
 -- Define the main module table
 local M = {}
@@ -85,13 +86,6 @@ function M.setup(opts)
     -- Log or handle if coq is explicitly disabled
   end
 
-  -- Setup `health` integration if enabled
-  if user_config.integrations.health ~= false then
-    health_integration.setup() -- Health setup
-  else
-    -- Log or handle if health is explicitly disabled
-  end
-
   -- Future integrations can be added similarly
   -- if user_config.integrations.some_new_integration ~= false then
   --     require("blade-nav.integrations.some_new_integration").setup(user_config)
@@ -102,6 +96,8 @@ function M.setup(opts)
 
   -- Indicate successful setup
   -- print("[BladeNav] Setup completed.")
+  commands.install_artisan_command()
+  commands.clear_cache()
 end
 
 -- Return the module table so it can be required and used

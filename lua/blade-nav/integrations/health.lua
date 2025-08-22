@@ -1,11 +1,14 @@
 -- lua/blade-nav/integrations/health.lua
--- Integration for Neovim's :checkhealth feature.
+-- Comprehensive Health Check integration for Neovim's :checkhealth
 
-local utils = require("blade-nav.utils")               -- Assuming general utils exist
-local log = require("blade-nav.utils.log")             -- Assuming logging exists
-local config_module = require("blade-nav.core.config") -- Assuming core config
+local fs = require("blade-nav.utils.fs")
+local cmd = require("blade-nav.utils.cmd")
+local log = require("blade-nav.utils.log")
+local config_module = require("blade-nav.core.config")
+local laravel = require("blade-nav.utils.laravel")
+local cache = require("blade-nav.utils.cache")
 
--- Use Neovim's health reporting functions (fallbacks for older versions)
+-- Use Neovim's health reporting functions (backward compatible)
 local start = vim.health.start or vim.health.report_start
 local ok = vim.health.ok or vim.health.report_ok
 local warn = vim.health.warn or vim.health.report_warn
@@ -13,139 +16,250 @@ local error = vim.health.error or vim.health.report_error
 
 local M = {}
 
--- Check if the required Tree-sitter parsers are available
-local function check_treesitter_parsers()
+--------------------------------------------------------------------------------
+-- Environment
+--------------------------------------------------------------------------------
+local function check_environment()
+  local version = vim.version()
+  ok(string.format("Neovim version: %d.%d.%d", version.major, version.minor, version.patch))
+  ok("Operating System: " .. vim.loop.os_uname().sysname)
+
+  if fs.command_exists("php") then
+    local php_version = vim.fn.system("php --version"):match("^[^\n]+")
+    ok("PHP: " .. (php_version or "unknown version"))
+  else
+    error("PHP not found in PATH")
+  end
+
+  if fs.command_exists("php") then
+    local artisan_version = vim.fn.system("php artisan --version"):match("^[^\n]+")
+    if artisan_version and artisan_version ~= "" then
+      ok("Artisan: " .. artisan_version)
+    else
+      warn("Cannot run `php artisan --version`")
+    end
+  end
+end
+
+--------------------------------------------------------------------------------
+-- Tree-sitter
+--------------------------------------------------------------------------------
+local function check_treesitter()
   local ts_status, ts_parsers = pcall(require, "nvim-treesitter.parsers")
   if not ts_status then
-    error("nvim-treesitter is not available or failed to load.")
+    error("nvim-treesitter not available")
     return
   end
 
-  local required_langs = { "php", "blade" } -- Add "vue" if Vue support is relevant
-  local missing_parsers = {}
-
+  local required_langs = { "php", "blade" }
+  local missing = {}
   for _, lang in ipairs(required_langs) do
     if ts_parsers.has_parser(lang) then
-      ok(string.format("Tree-sitter parser for '%s' is installed.", lang))
+      ok("Tree-sitter parser for '" .. lang .. "' is installed")
     else
-      table.insert(missing_parsers, lang)
+      table.insert(missing, lang)
     end
   end
 
-  if #missing_parsers > 0 then
+  if #missing > 0 then
     warn(
-      string.format(
-        "Missing Tree-sitter parsers: %s. Install using :TSInstall %s",
-        table.concat(missing_parsers, ", "),
-        table.concat(missing_parsers, " ")
-      )
+      "Missing parsers: " .. table.concat(missing, ", ") .. ". Install with :TSInstall " .. table.concat(missing, " ")
     )
   end
 end
 
--- Check if external commands are available
+--------------------------------------------------------------------------------
+-- External Commands
+--------------------------------------------------------------------------------
 local function check_external_commands()
-  local required_commands = { "php" } -- Add "fd", "find" if used for file discovery
-  local missing_commands = {}
+  local cmds = { "php", "fd", "find" }
+  local missing = {}
 
-  for _, cmd in ipairs(required_commands) do
-    if utils.fs.command_exists(cmd) then -- Assuming fs.command_exists exists
-      ok(string.format("External command '%s' is available.", cmd))
+  for _, c in ipairs(cmds) do
+    if fs.command_exists(c) then
+      ok("External command '" .. c .. "' available")
     else
-      table.insert(missing_commands, cmd)
+      table.insert(missing, c)
     end
   end
 
-  if #missing_commands > 0 then
-    warn(string.format("Missing external commands: %s. Please install them.", table.concat(missing_commands, ", ")))
+  if #missing > 0 then
+    warn("Missing external commands: " .. table.concat(missing, ", "))
   end
 end
 
--- Check configuration options
-local function check_configuration()
-  local config = config_module.get() -- Get current config
-  ok("BladeNav configuration loaded successfully.")
+--------------------------------------------------------------------------------
+-- Project structure
+--------------------------------------------------------------------------------
+local function check_project_files()
+  if vim.loop.fs_stat("composer.json") then
+    ok("composer.json found")
+  else
+    error("Missing composer.json")
+  end
 
-  -- Example: Check a specific config option
-  -- if config.some_option ~= nil then
-  --     ok(string.format("Configuration option 'some_option' is set to: %s", tostring(config.some_option)))
-  -- else
-  --     warn("Configuration option 'some_option' is not set, using default.")
-  -- end
+  if vim.loop.fs_stat("resources/views") then
+    ok("resources/views directory exists")
+  else
+    error("Missing resources/views directory")
+  end
 
-  -- Add more checks for specific config values if needed
+  if vim.loop.fs_stat("vendor/composer/autoload_psr4.php") then
+    ok("vendor/composer/autoload_psr4.php found")
+  else
+    error("Missing vendor/composer/autoload_psr4.php")
+  end
+
+  local root_dir, is_ok = laravel.get_root_dir()
+  print("Root dir: " .. root_dir, is_ok)
+  if is_ok and root_dir and root_dir ~= "" then
+    ok("Git repository found at " .. root_dir)
+  else
+    warn("Git repository not detected")
+  end
 end
 
--- Check integration availability
-local function check_integrations()
+--------------------------------------------------------------------------------
+-- BladeNav artisan command
+--------------------------------------------------------------------------------
+local function check_blade_command()
+  local result = cmd.execute_silent({ "php", "artisan", "--format=json" })
+  if result == "" then
+    warn("Cannot run `php artisan`. BladeNav artisan command cannot be checked.")
+    return
+  end
+
+  local decoded = vim.fn.json_decode(result)
+  local found = false
+  for _, command in ipairs(decoded.commands or {}) do
+    if command.name == "blade-nav:components-aliases" then
+      ok("BladeNav artisan command 'blade-nav:components-aliases' available")
+      found = true
+      break
+    end
+  end
+
+  if not found then
+    warn("BladeNav artisan command not found. Run :BladeNavInstallArtisanCommand to install it.")
+    return
+  end
+
+  -- Compare installed BladeNav.php with local source
+  local source = laravel.get_blade_nav_filename()
+  local local_blade, err = laravel.read_file(source)
+  if not local_blade then
+    warn("Could not read BladeNav.php source: " .. err)
+    return
+  end
+  local_blade = laravel.modify_namespace(local_blade, laravel.psr4_app())
+
+  local file, file_err = fs.read_file("app/Console/Commands/BladeNav.php")
+  if not file then
+    warn("BladeNav.php not found in app/Console/Commands/: " .. file_err)
+    return
+  end
+
+  if vim.fn.sha256(local_blade) ~= vim.fn.sha256(file) then
+    warn("BladeNav.php in app/Console/Commands/ is outdated. Run :BladeNavInstallArtisanCommand to refresh it.")
+  else
+    ok("BladeNav.php is up to date")
+  end
+end
+
+--------------------------------------------------------------------------------
+-- Configuration validation
+--------------------------------------------------------------------------------
+local function check_config()
   local config = config_module.get()
+  ok("BladeNav configuration loaded")
 
-  -- Check cmp
-  if config.integrations.cmp then
-    local has_cmp, _ = pcall(require, "cmp")
-    if has_cmp then
-      ok("nvim-cmp integration is enabled and nvim-cmp is available.")
-    else
-      warn("nvim-cmp integration is enabled but nvim-cmp plugin not found.")
-    end
-  else
-    ok("nvim-cmp integration is disabled.")
+  if vim.g.blade_nav and vim.g.blade_nav.laravel_components then
+    local paths = vim.g.blade_nav.laravel_components
+    local suffix = #paths > 1 and "s" or ""
+    ok("Additional search path" .. suffix .. " for Laravel components: " .. table.concat(paths, ", "))
   end
 
-  -- Check blink
-  if config.integrations.blink then
-    local has_blink, _ = pcall(require, "blink.cmp")
-    if has_blink then
-      ok("blink.cmp integration is enabled and blink.cmp is available.")
+  if vim.g.blade_nav and vim.g.blade_nav.include_routes ~= nil then
+    if type(vim.g.blade_nav.include_routes) ~= "boolean" then
+      warn("include_routes should be boolean")
     else
-      warn("blink.cmp integration is enabled but blink.cmp plugin not found.")
+      ok("include_routes = " .. tostring(vim.g.blade_nav.include_routes))
     end
-  else
-    ok("blink.cmp integration is disabled.")
-  end
-
-  -- Check coq
-  if config.integrations.coq then
-    local has_coq, _ = pcall(require, "coq")
-    if has_coq then
-      ok("coq.nvim integration is enabled and coq.nvim is available.")
-    else
-      warn("coq.nvim integration is enabled but coq.nvim plugin not found.")
-    end
-  else
-    ok("coq.nvim integration is disabled.")
-  end
-
-  -- Check health itself (this file)
-  if config.integrations.health then
-    ok("Health check integration is enabled.")
-  else
-    -- This is contradictory, but just for completeness based on config structure
-    warn("Health check integration is disabled (but running now).")
   end
 end
 
--- Main check function called by :checkhealth
+--------------------------------------------------------------------------------
+-- Integrations
+--------------------------------------------------------------------------------
+local function check_integrations()
+  local cfg = config_module.get()
+
+  local function check(name, require_path)
+    if cfg.integrations[name] then
+      local ok_mod, _ = pcall(require, require_path)
+      if ok_mod then
+        ok(name .. " integration enabled and available")
+      else
+        warn(name .. " integration enabled but not installed")
+      end
+    else
+      ok(name .. " integration disabled")
+    end
+  end
+
+  check("cmp", "cmp")
+  check("blink", "blink.cmp")
+  check("coq", "coq")
+  if cfg.integrations.health then
+    ok("Health integration enabled")
+  end
+end
+
+--------------------------------------------------------------------------------
+-- Routes
+--------------------------------------------------------------------------------
+local function check_routes()
+  -- Clear cache before cold load
+  cache.clear("route_list:route_name")
+
+  local start_time = vim.loop.hrtime()
+  local ok1, routes1 = pcall(laravel.get_route_names)
+  local elapsed1 = (vim.loop.hrtime() - start_time) / 1e6 -- ms
+
+  if ok1 and routes1 and #routes1 > 0 then
+    ok(string.format("Cold route load: %d routes in %.2f ms", #routes1, elapsed1))
+  else
+    warn("Cold route load failed")
+  end
+
+  -- Warm load
+  local start_time2 = vim.loop.hrtime()
+  local ok2, routes2 = pcall(laravel.get_route_names)
+  local elapsed2 = (vim.loop.hrtime() - start_time2) / 1e6 -- ms
+
+  if ok2 and routes2 and #routes2 > 0 then
+    ok(string.format("Warm route load: %d routes in %.2f ms", #routes2, elapsed2))
+  else
+    warn("Warm route load failed")
+  end
+end
+
+--------------------------------------------------------------------------------
+-- Main
+--------------------------------------------------------------------------------
 function M.check()
   start("BladeNav Health Check")
 
-  ok("BladeNav plugin loaded successfully.")
+  ok("BladeNav plugin loaded")
 
-  check_configuration()
-  check_treesitter_parsers()
+  check_environment()
+  check_treesitter()
   check_external_commands()
+  check_project_files()
+  check_blade_command()
+  check_config()
   check_integrations()
-
-  -- Add more checks as needed (e.g., cache directory writable, artisan command accessible)
-end
-
--- Setup function (might be used to register the health check source or perform initial checks)
-function M.setup()
-  -- In Neovim, health checks are typically found automatically if placed in plugin/health.lua
-  -- or if a function named `check` is exported from a module in the plugin structure.
-  -- Registering might not be strictly necessary, but we can log that setup ran.
-  log.debug("BladeNav health integration setup called.")
-  -- If specific setup is needed (e.g., creating autocommands related to health), do it here.
+  check_routes()
 end
 
 return M

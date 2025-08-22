@@ -3,6 +3,8 @@
 local utils = require("blade-nav.utils")
 local log = require("blade-nav.utils.log")
 local tbl = require("blade-nav.utils.table")
+local str = require("blade-nav.utils.string")
+local laravel = require("blade-nav.utils.laravel")
 
 -- `COQsources` is a global registry of sources for coq.nvim
 _G.COQsources = _G.COQsources or {}
@@ -18,7 +20,7 @@ _G.COQsources["blade-nav"] = {
     end
 
     -- Get keyword pattern and current input line
-    local pattern = utils.get_keyword_pattern() -- Assuming this function exists in utils
+    local pattern = str.get_keyword_pattern()
     local input = vim.api.nvim_get_current_line()
 
     -- Check if the line matches the keyword pattern
@@ -29,7 +31,7 @@ _G.COQsources["blade-nav"] = {
 
     -- Get view names (this logic needs implementation)
     -- Placeholder logic - replace with actual fetching
-    local index, names = utils.get_view_names(input) -- Assuming this function exists
+    local index, names = laravel.get_view_names(input) -- Assuming this function exists
     if not index then
       callback({ isIncomplete = true })
       return

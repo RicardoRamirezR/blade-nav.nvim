@@ -1,7 +1,7 @@
 -- lua/blade-nav/utils/fs.lua
+local uv = vim.loop
 local cmd = require("blade-nav.utils.cmd")
 local log = require("blade-nav.utils.log")
-local uv = vim.loop
 
 local M = {}
 
@@ -31,6 +31,20 @@ function M.read_file(path)
   end
 
   return data
+end
+
+--- Write a file
+--- @param file_path string
+--- @param content string
+--- @return boolean|nil, string
+M.write_file = function(file_path, content)
+  local file = io.open(file_path, "w")
+  if not file then
+    return nil, "Could not open file: " .. file_path
+  end
+  file:write(content)
+  file:close()
+  return true, ""
 end
 
 --- Check if a file or directory exists.
@@ -73,7 +87,7 @@ function M.normalize_path(path)
   else
     result = path:gsub("\\", "/")
   end
-  -- Return only the first value (ignore substitution count)
+
   return result
 end
 
@@ -81,8 +95,8 @@ end
 --- @param path string
 --- @param extension string
 --- @param exclude_dirs? table
---- @return table
-function M.find_files(path, extension, exclude_dirs)
+--- @return string|nil
+function M.fixind_files(path, extension, exclude_dirs)
   local commands = {
     fd = { cmd = "fd --type=file --extension %s . %s %s", exclude = " -E %s" },
     find = { cmd = "find ./%s -type f -name *.%s %s", exclude = " -not -path './%s/*'" },
@@ -105,8 +119,51 @@ function M.find_files(path, extension, exclude_dirs)
   else
     command = string.format(cmd_template, path, extension, exclude_cmd)
   end
-  local result, _ = cmd.execute_silent({ "sh", "-c", command }) -- Use sh -c for complex commands
+  local result, _ = cmd.execute_silent({ "sh", "-c", command })
   return result
+end
+
+--- Find files using `fd` or `find`.
+--- @param path string
+--- @param extension string
+--- @param exclude_dirs? string[]
+--- @return string[]|nil
+function M.find_files(path, extension, exclude_dirs)
+  local tool, cmd_template, exclude_fmt
+
+  if M.command_exists("fd") then
+    tool = "fd"
+    cmd_template = "fd --type=file --extension %s . %s %s"
+    exclude_fmt = "-E %s"
+  else
+    tool = "find"
+    cmd_template = "find %s -type f -name '*.%s' %s"
+    exclude_fmt = "-not -path './%s/*'"
+  end
+
+  local exclude_cmd = ""
+  if exclude_dirs and #exclude_dirs > 0 then
+    exclude_cmd = table.concat(
+      vim.tbl_map(function(dir)
+        return string.format(exclude_fmt, dir)
+      end, exclude_dirs),
+      " "
+    )
+  end
+
+  local command
+  if tool == "fd" then
+    command = string.format(cmd_template, extension, path, exclude_cmd)
+  else
+    command = string.format(cmd_template, path, extension, exclude_cmd)
+  end
+
+  local result = cmd.execute_silent({ "sh", "-c", command })
+  if not result or result == "" then
+    return nil
+  end
+
+  return vim.split(result, "\n", { trimempty = true })
 end
 
 return M
