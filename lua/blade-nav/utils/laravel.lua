@@ -78,7 +78,8 @@ function M.get_psr4_mappings()
     return cached
   end
 
-  local composer_data = fs.read_file("composer.json")
+  local root = M.get_root_dir()
+  local composer_data = fs.read_file(root .. "/composer.json")
   if not composer_data then
     log.warn("composer.json not found or unreadable.")
     return {}
@@ -121,7 +122,8 @@ local function watch_route_cache()
     return
   end
 
-  local ok, start_err = pcall(handle.start, handle, "bootstrap/cache", {}, function(err2, fname, events)
+  local root = M.get_root_dir()
+  local ok, start_err = pcall(handle.start, handle, root .. "/bootstrap/cache", {}, function(err2, fname, events)
     if err2 then
       vim.schedule(function()
         log.error("Route cache dir watcher error: %s", err2)
@@ -167,7 +169,8 @@ local function watch_routes_dir()
     return
   end
 
-  local ok, start_err = pcall(handle.start, handle, "routes", {}, function(err2, filename, events)
+  local root = M.get_root_dir()
+  local ok, start_err = pcall(handle.start, handle, root .. "/routes", {}, function(err2, filename, events)
     if err2 then
       log.error("Route watcher error: %s", err2)
       return
@@ -199,13 +202,14 @@ local function build_route_map(routes)
 end
 
 local function prime_routes(routes)
+  local root = M.get_root_dir()
   local all_out, ok_all = cmd.execute_silent({
     "php",
     "artisan",
     "route:list",
     "--json",
     "--columns=name,action",
-  })
+  }, { cwd = root })
 
   local primed_map = {}
   if ok_all then
@@ -250,6 +254,7 @@ function M.get_route_list(route_name)
   watch_routes_dir()
   watch_route_cache()
 
+  local root = M.get_root_dir()
   local output, ok = cmd.execute_silent({
     "php",
     "artisan",
@@ -257,7 +262,7 @@ function M.get_route_list(route_name)
     "--name=" .. route_name,
     "--json",
     "--columns=name,action",
-  })
+  }, { cwd = root })
   if not ok then
     log.warn("Failed to execute 'php artisan route:list --json'. Output: %s", output or "nil")
     return {}
@@ -568,10 +573,17 @@ end
 --- @param cwd string|nil
 --- @return boolean
 function M.is_laravel_project(cwd)
-  cwd = cwd or (uv and uv.cwd()) or "."
-  local function P(p)
-    return (cwd .. "/" .. p)
+  local root_dir = cwd or M.get_root_dir()
+  if not root_dir or root_dir == "" then
+    root_dir = (uv and uv.cwd()) or vim.fn.getcwd() or "."
   end
+  local function P(p)
+    return root_dir .. "/" .. p
+  end
+  local function P(p)
+    return root_dir .. "/" .. p
+  end
+
   if fs.path_exists(P("artisan")) then
     return true
   end
@@ -596,6 +608,6 @@ function M.is_laravel_project(cwd)
 end
 
 M.__test_build_route_map = build_route_map
-M.__test_invalidate_routes_cache = invalidate_routes_cache
+M.__health_check_views = find_views
 
 return M

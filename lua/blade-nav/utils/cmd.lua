@@ -13,10 +13,10 @@ function M.exists(name)
 end
 
 --- Executes system command silently (combining stdout/stderr).
---- @param cmd table Command as a list { "command", "arg1", ... }
+--- @param cmd table|string Command as a list { "command", "arg1", ... } or string
 --- @param opts? table Options for vim.system (e.g., { cwd = "/path" })
 --- @return string|nil, boolean Output (stdout/stderr combined) or nil, success flag
-function M.execute_silent(cmd)
+function M.execute_silent(cmd, opts)
   if type(cmd) == "string" then
     cmd = M.explode(" ", cmd)
   end
@@ -26,8 +26,10 @@ function M.execute_silent(cmd)
     return "", false
   end
 
+  opts = vim.tbl_extend("force", { text = true }, opts or {})
+
   local ok, obj = pcall(function()
-    return vim.system(cmd, { text = true }):wait()
+    return vim.system(cmd, opts):wait({ opts.timeout or 5000 })
   end)
 
   if not ok or obj.code ~= 0 then

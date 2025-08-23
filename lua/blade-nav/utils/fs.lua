@@ -91,38 +91,6 @@ function M.normalize_path(path)
   return result
 end
 
---- find files using `fd` or `find`
---- @param path string
---- @param extension string
---- @param exclude_dirs? table
---- @return string|nil
-function M.fixind_files(path, extension, exclude_dirs)
-  local commands = {
-    fd = { cmd = "fd --type=file --extension %s . %s %s", exclude = " -E %s" },
-    find = { cmd = "find ./%s -type f -name *.%s %s", exclude = " -not -path './%s/*'" },
-  }
-  local function build_exclude_cmd(exclude_fmt, dirs)
-    local exclude_cmd = ""
-    for _, dir in ipairs(dirs or {}) do
-      exclude_cmd = exclude_cmd .. " " .. string.format(exclude_fmt, dir)
-    end
-    return exclude_cmd
-  end
-  local tool = M.command_exists("fd") and "fd" or "find"
-  local cmd_template = commands[tool].cmd
-  local exclude_template = commands[tool].exclude
-
-  local exclude_cmd = build_exclude_cmd(exclude_template, exclude_dirs)
-  local command
-  if tool == "fd" then
-    command = string.format(cmd_template, extension, path, exclude_cmd)
-  else
-    command = string.format(cmd_template, path, extension, exclude_cmd)
-  end
-  local result, _ = cmd.execute_silent({ "sh", "-c", command })
-  return result
-end
-
 --- Find files using `fd` or `find`.
 --- @param path string
 --- @param extension string
@@ -158,7 +126,8 @@ function M.find_files(path, extension, exclude_dirs)
     command = string.format(cmd_template, path, extension, exclude_cmd)
   end
 
-  local result = cmd.execute_silent({ "sh", "-c", command })
+  local root = M.get_root_dir()
+  local result = cmd.execute_silent({ "sh", "-c", command }, { cwd = root })
   if not result or result == "" then
     return nil
   end

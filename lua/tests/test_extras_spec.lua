@@ -34,7 +34,7 @@ describe("Extra Laravel utils", function()
     local laravel = require("blade-nav.utils.laravel")
 
     -- directly call the internal helper
-    laravel.__test_invalidate_routes_cache()
+    laravel.invalidate_routes_cache()
     assert.is_nil(cache.get("route_list:foo"))
   end)
   --
