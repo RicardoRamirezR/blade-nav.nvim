@@ -40,12 +40,12 @@ end
 local default_config = {
   enable = true,
   cache_timeout = 50000, -- 5 seconds
-  debug = true,
+  debug = false,
   jsconfig_path = "./jsconfig.json",
   close_tag_on_complete = true,
   include_routes_in_cmp = true,
   laravel_components_paths = {},
-  targets = {
+  xxxtargets = {
     view = true,
     route = true,
     component = false,
@@ -53,6 +53,8 @@ local default_config = {
     config = true,
     directive = true, -- Example for future expansion
     xcomponent = true,
+    inertia = true,
+    vue = true,
   },
   handlers = {
     directive = true,
@@ -62,6 +64,8 @@ local default_config = {
     config = true,
     xcomponent = true,
     component = false,
+    inertia = true,
+    vue = true,
   },
   integrations = {
     blink = true,
@@ -160,10 +164,26 @@ function M.setup(user_config)
 end
 
 --- Get the current configuration.
---- @return BladeNavConfig
-function M.get()
+--- @return BladeNavConfig|string
+function M.get(key, value)
+  if key and value then
+    cache.merged[key] = value
+  end
+  if key then
+    return cache.merged[key]
+  end
   -- Return the cached merged configuration
   return cache.merged or {}
+end
+
+function M.set(key, value)
+  print("Set " .. key .. " to " .. value, cache.merged[key])
+  cache.merged[key] = value
+  print("Set " .. key .. " to " .. value, cache.merged[key])
+end
+
+function M.enableDebug()
+  cache.merged.debug = true
 end
 
 return M

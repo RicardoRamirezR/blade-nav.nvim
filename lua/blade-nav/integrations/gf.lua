@@ -40,15 +40,8 @@ end
 function M.gf()
   log.debug("BladeNav gf handler invoked.")
 
-  -- 1. Create the context based on the current editor state
   local context = context_creator.create_context()
 
-  -- 2. Delegate the resolution process to the targets module.
-  -- The targets.resolve_target function is responsible for:
-  --   - Iterating through registered handlers.
-  --   - Calling handler.get_target(context).
-  --   - Interpreting the result (e.g., handling choices, calling handler.resolve).
-  --   - Returning true if a target was successfully resolved/handled/picked.
   local resolved = targets.resolve_target(context)
 
   -- 3. Determine fallback behavior.
@@ -87,7 +80,7 @@ function M.setup()
     callback = function(args)
       local buf_ft = vim.api.nvim_buf_get_option(args.buf, "filetype")
       -- Check if the buffer's filetype is one we want to enhance
-      if buf_ft == "blade" or buf_ft == "php" then -- Add "vue" if needed
+      if buf_ft == "blade" or buf_ft == "php" or buf_ft == "vue" then -- Add "vue" if needed
         -- Remove any existing 'gf' mapping in this buffer to avoid conflicts
         -- pcall is used to prevent errors if 'gf' isn't mapped
         pcall(vim.keymap.del, "n", "gf", { buffer = args.buf })

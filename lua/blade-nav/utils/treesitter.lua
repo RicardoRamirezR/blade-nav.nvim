@@ -246,12 +246,13 @@ function M.extract_component(line_text, target_name)
   return current_tag
 end
 
-local function extract_php_function_keys(php_code, target_fn)
+function M.extract_php_function_keys(php_code, target_fn)
   local keys = {}
 
   if not php_code:match("^%s*<%?php") then
     php_code = "<?php " .. php_code
   end
+  log.debug(php_code)
 
   local php_parser = vim.treesitter.get_string_parser(php_code, "php")
   local php_tree = php_parser:parse()[1]
@@ -267,7 +268,7 @@ local function extract_php_function_keys(php_code, target_fn)
 
   local query_string = [[
     ; Standard function call:
-    ; config('key'), env('key') route('name') view('view') markdown('markdown')
+    ; config('key'), env('key') route('name') view('view') markdown('markdown') interia('view')
     (function_call_expression
       function: (name) @fn_name
       arguments: (arguments
@@ -282,7 +283,7 @@ local function extract_php_function_keys(php_code, target_fn)
       (#eq? @fn_name "%s"))
 
       ; Scoped call:
-      ; Config::get('key'), Config::set('key', ...) Route::view('view', ...) View::make('view')
+      ; Config::get('key'), Config::set('key', ...) Route::view('view', ...) View::make('view') Inertia::render('view')
       ; This part matches when target_fn is the method name (e.g., "get", "set", "make", "view", "render")
       (scoped_call_expression
         scope: (name) @scope
@@ -297,8 +298,12 @@ local function extract_php_function_keys(php_code, target_fn)
 
   local scope = target_fn:gsub("^%l", string.upper)
   local php_query = vim.treesitter.query.parse("php", string.format(query_string, target_fn, scope))
+  if target_fn == "inertia" then
+    print(">>>>> ", scope)
+  end
 
   for id, node in php_query:iter_captures(php_root, php_code) do
+    print(">>>> ", php_query.captures[id], vim.treesitter.get_node_text(node, php_code))
     if php_query.captures[id] == "key_str" then
       table.insert(keys, vim.treesitter.get_node_text(node, php_code))
     end
@@ -317,7 +322,7 @@ local function extract_blade_function_keys(line_text, target_fn)
 
   for _, node in php_only_query:iter_captures(blade_root, line_text) do
     local php_code = vim.treesitter.get_node_text(node, line_text)
-    local partial_keys = extract_php_function_keys(php_code, target_fn)
+    local partial_keys = M.extract_php_function_keys(php_code, target_fn)
     vim.list_extend(keys, partial_keys)
   end
 
@@ -328,7 +333,7 @@ function M.extract_keys_from_code(line_text, target_fn)
   log.debug("Extracting keys from code: %s, target_fn: %s", line_text, target_fn)
   local keys = extract_blade_function_keys(line_text, target_fn)
   if #keys == 0 then
-    keys = extract_php_function_keys(line_text, target_fn)
+    keys = M.extract_php_function_keys(line_text, target_fn)
   end
   log.debug("Extracted keys: %s", vim.inspect(keys))
   return keys

@@ -1,13 +1,12 @@
 -- lua/blade-nav/init.lua
 
 -- Import required core modules
-local config = require("blade-nav.core.config")                     -- Handles plugin configuration
-local gf_integration = require("blade-nav.integrations.gf")         -- Handles the `gf` mapping
-local cmp_integration = require("blade-nav.integrations.cmp")       -- Handles nvim-cmp integration
-local blink_integration = require("blade-nav.integrations.blink")   -- Handles blink.cmp integration
-local coq_integration = require("blade-nav.integrations.coq")       -- Handles coq.nvim integration
-local health_integration = require("blade-nav.integrations.health") -- Handles :checkhealth
-local targets = require("blade-nav.targets")                        -- Handles target handler loading/registration
+local config = require("blade-nav.core.config")                   -- Handles plugin configuration
+local gf_integration = require("blade-nav.integrations.gf")       -- Handles the `gf` mapping
+local cmp_integration = require("blade-nav.integrations.cmp")     -- Handles nvim-cmp integration
+local blink_integration = require("blade-nav.integrations.blink") -- Handles blink.cmp integration
+local coq_integration = require("blade-nav.integrations.coq")     -- Handles coq.nvim integration
+local targets = require("blade-nav.targets")                      -- Handles target handler loading/registration
 local commands = require("blade-nav.commands")
 
 -- Define the main module table
