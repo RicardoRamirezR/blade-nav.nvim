@@ -1,3 +1,4 @@
+-- lua/blade-nav/utils/vue-imports.lua
 local config = require("blade-nav.core.config")
 local cache = require("blade-nav.utils.cache")
 local log = require("blade-nav.utils.log")

@@ -51,7 +51,7 @@ function source:get_completions(ctx, callback)
   -- You should never filter items based on the keyword, since blink.cmp will
   -- do this for you based on the `label` or `filterText`.
 
-  local context = context_creator.create_context()
+  local context = context_creator.create()
   -- Simplified: Get a list of *all* potential completions for the current filetype/context
   -- A more advanced version might tailor the list based on the specific context (e.g., inside @include() )
 

@@ -298,12 +298,8 @@ function M.extract_php_function_keys(php_code, target_fn)
 
   local scope = target_fn:gsub("^%l", string.upper)
   local php_query = vim.treesitter.query.parse("php", string.format(query_string, target_fn, scope))
-  if target_fn == "inertia" then
-    print(">>>>> ", scope)
-  end
 
   for id, node in php_query:iter_captures(php_root, php_code) do
-    print(">>>> ", php_query.captures[id], vim.treesitter.get_node_text(node, php_code))
     if php_query.captures[id] == "key_str" then
       table.insert(keys, vim.treesitter.get_node_text(node, php_code))
     end

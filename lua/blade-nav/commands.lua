@@ -7,7 +7,7 @@ local M = {}
 function M.install_artisan_command()
   vim.api.nvim_create_user_command("BladeNavInstallArtisanCommand", function()
     local source = laravel.get_blade_nav_filename()
-    local root_dir = laravel.get_root_dir()
+    local root_dir = fs.get_root_dir()
     local dest_dir = root_dir .. "/app/Console/Commands/BladeNav.php"
 
     local src_content, err = fs.read_file(source)

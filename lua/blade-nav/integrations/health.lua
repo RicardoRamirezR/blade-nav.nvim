@@ -55,7 +55,7 @@ local function check_treesitter()
     return
   end
 
-  local required_langs = { "php", "blade" }
+  local required_langs = { "php", "blade", "vue", "html" }
   local missing = {}
   for _, lang in ipairs(required_langs) do
     if ts_parsers.has_parser(lang) then
@@ -94,7 +94,7 @@ end
 local function check_project_files()
   start("Project Structure")
 
-  local root_dir = laravel.get_root_dir()
+  local root_dir = fs.get_root_dir()
   if not root_dir or root_dir == "" then
     root_dir = vim.fn.getcwd()
     warn("Could not detect Git root, fallback to cwd: " .. root_dir)
@@ -135,14 +135,14 @@ local function check_blade_command()
   -- Purpose explanation
   ok("Purpose: provides component aliases from external packages via `blade-nav:components-aliases`")
 
-  local root = laravel.get_root_dir()
-  local result = cmd.execute_silent({ "php", "artisan", "--format=json" }, { cwd = root })
-  if result == "" then
-    warn("Cannot run `php artisan` to detect commands")
+  local root = fs.get_root_dir()
+  local output, ok_cmd = cmd.execute_silent({ "php", "artisan", "--format=json" }, { cwd = root })
+  if not ok_cmd then
+    warn("Cannot run `php artisan` to detect commands " .. output)
     return
   end
 
-  local decoded = vim.fn.json_decode(result)
+  local decoded = vim.fn.json_decode(output)
   local found = false
   for _, command in ipairs(decoded.commands or {}) do
     if command.name == "blade-nav:components-aliases" then

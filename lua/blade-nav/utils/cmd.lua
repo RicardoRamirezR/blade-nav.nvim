@@ -15,7 +15,7 @@ end
 --- Executes system command silently (combining stdout/stderr).
 --- @param cmd table|string Command as a list { "command", "arg1", ... } or string
 --- @param opts? table Options for vim.system (e.g., { cwd = "/path" })
---- @return string|nil, boolean Output (stdout/stderr combined) or nil, success flag
+--- @return string,boolean Output (stdout/stderr combined) or nil, success flag
 function M.execute_silent(cmd, opts)
   if type(cmd) == "string" then
     cmd = M.explode(" ", cmd)
@@ -27,13 +27,19 @@ function M.execute_silent(cmd, opts)
   end
 
   opts = vim.tbl_extend("force", { text = true }, opts or {})
+  local timeout = opts.timeout or 5000
 
   local ok, obj = pcall(function()
-    return vim.system(cmd, opts):wait({ opts.timeout or 5000 })
+    return vim.system(cmd, opts):wait(timeout)
   end)
 
-  if not ok or obj.code ~= 0 then
-    return "", false
+  if not ok then
+    return tostring(obj), false
+  end
+
+  if obj.code ~= 0 then
+    local output = (obj.stdout or "") .. (obj.stderr or "")
+    return output, false
   end
 
   return obj.stdout, true

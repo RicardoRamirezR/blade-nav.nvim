@@ -40,7 +40,7 @@ end
 function M.gf()
   log.debug("BladeNav gf handler invoked.")
 
-  local context = context_creator.create_context()
+  local context = context_creator.create()
 
   local resolved = targets.resolve_target(context)
 

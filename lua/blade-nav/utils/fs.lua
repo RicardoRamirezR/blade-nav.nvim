@@ -2,8 +2,31 @@
 local uv = vim.loop
 local cmd = require("blade-nav.utils.cmd")
 local log = require("blade-nav.utils.log")
+local cache = require("blade-nav.utils.cache")
 
 local M = {}
+
+--- Get the root directory of the project.
+--- @return string
+function M.get_root_dir()
+  local cache_key = "root_dir"
+  local cached = cache.get(cache_key)
+  if cached then
+    return cached
+  end
+
+  local root_dir, ok = cmd.execute_silent({ "git", "rev-parse", "--show-toplevel" })
+  if not ok then
+    root_dir = vim.fn.getcwd()
+  end
+
+  root_dir = root_dir:gsub("[\r\n]+$", "") -- Trim trailing newlines
+  if root_dir == "" then
+    root_dir = vim.fn.getcwd()
+  end
+
+  return cache.set(cache_key, root_dir), ok
+end
 
 --- Safely read a file.
 --- @param path string File path
@@ -127,12 +150,12 @@ function M.find_files(path, extension, exclude_dirs)
   end
 
   local root = M.get_root_dir()
-  local result = cmd.execute_silent({ "sh", "-c", command }, { cwd = root })
-  if not result or result == "" then
+  local output, ok = cmd.execute_silent({ "sh", "-c", command }, { cwd = root })
+  if not ok then
     return nil
   end
 
-  return vim.split(result, "\n", { trimempty = true })
+  return vim.split(output, "\n", { trimempty = true })
 end
 
 return M

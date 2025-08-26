@@ -42,7 +42,7 @@ function M.get_target(context)
     return nil
   end
   -- Early return if context is invalid for this handler
-  if not context.line or context.cursor_col_1 <= 0 or context.filetype ~= "blade" then
+  if context.filetype ~= "blade" then
     log.debug("Invalid context for Blade directive handler.")
     return nil
   end

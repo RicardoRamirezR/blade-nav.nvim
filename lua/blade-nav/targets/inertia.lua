@@ -3,7 +3,7 @@
 
 local log = require("blade-nav.utils.log")
 local ts_utils = require("blade-nav.utils.treesitter") -- Import the TS utility for inertias
-local laravel = require("blade-nav.utils.laravel")     -- Import Laravel utilities
+local fs = require("blade-nav.utils.fs")               -- Import Laravel utilities
 local extractor = require("blade-nav.utils.inertia-path-extractor")
 local cache = require("blade-nav.utils.cache")
 
@@ -43,7 +43,7 @@ function M.get_target(context)
 end
 
 local function read_app_file()
-  local root = laravel.get_root_dir()
+  local root = fs.get_root_dir()
 
   -- Define possible file paths
   local possible_paths = {

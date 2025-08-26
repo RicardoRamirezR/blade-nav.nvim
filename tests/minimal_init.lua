@@ -23,7 +23,7 @@ vim.opt.runtimepath:append("~/.local/share/nvim/lazy/nvim-treesitter")
 local ok, ts_configs = pcall(require, "nvim-treesitter.configs")
 if ok then
   ts_configs.setup({
-    ensure_installed = { "blade", "php", "lua" },
+    ensure_installed = { "blade", "php", "html", "vue" },
     sync_install = true,
     highlight = { enable = false },
   })

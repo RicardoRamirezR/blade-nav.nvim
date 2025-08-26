@@ -78,7 +78,7 @@ function M.get_psr4_mappings()
     return cached
   end
 
-  local root = M.get_root_dir()
+  local root = fs.get_root_dir()
   local composer_data = fs.read_file(root .. "/composer.json")
   if not composer_data then
     log.warn("composer.json not found or unreadable.")
@@ -122,7 +122,7 @@ local function watch_route_cache()
     return
   end
 
-  local root = M.get_root_dir()
+  local root = fs.get_root_dir()
   local ok, start_err = pcall(handle.start, handle, root .. "/bootstrap/cache", {}, function(err2, fname, events)
     if err2 then
       vim.schedule(function()
@@ -169,7 +169,7 @@ local function watch_routes_dir()
     return
   end
 
-  local root = M.get_root_dir()
+  local root = fs.get_root_dir()
   local ok, start_err = pcall(handle.start, handle, root .. "/routes", {}, function(err2, filename, events)
     if err2 then
       log.error("Route watcher error: %s", err2)
@@ -202,7 +202,7 @@ local function build_route_map(routes)
 end
 
 local function prime_routes(routes)
-  local root = M.get_root_dir()
+  local root = fs.get_root_dir()
   local all_out, ok_all = cmd.execute_silent({
     "php",
     "artisan",
@@ -241,7 +241,7 @@ function M.get_route_list(route_name)
     return primed_routes
   end
 
-  if not route then
+  if not route_name then
     return prime_routes()
   end
 
@@ -254,7 +254,7 @@ function M.get_route_list(route_name)
   watch_routes_dir()
   watch_route_cache()
 
-  local root = M.get_root_dir()
+  local root = fs.get_root_dir()
   local output, ok = cmd.execute_silent({
     "php",
     "artisan",
@@ -264,6 +264,7 @@ function M.get_route_list(route_name)
     "--columns=name,action",
   }, { cwd = root })
   if not ok then
+    log.debug("Root: " .. root)
     log.warn("Failed to execute 'php artisan route:list --json'. Output: %s", output or "nil")
     return {}
   end
@@ -458,27 +459,9 @@ function M.check_blade_command()
     return cached
   end
 
-  local root_dir = M.get_root_dir()
+  local root_dir = fs.get_root_dir()
   local exists = fs.path_exists(root_dir .. "/app/Console/Commands/BladeNav.php")
   return cache.set(cache_key, exists)
-end
-
---- Get the root directory of the project.
---- @return string
-function M.get_root_dir()
-  local cache_key = "root_dir"
-  local cached = cache.get(cache_key)
-  if cached then
-    return cached
-  end
-
-  local root_dir, ok = cmd.execute_silent({ "git", "rev-parse", "--show-toplevel" })
-  root_dir = root_dir:gsub("[\r\n]+$", "") -- Trim trailing newlines
-  if root_dir == "" then
-    root_dir = vim.fn.getcwd()
-  end
-
-  return cache.set(cache_key, root_dir), ok
 end
 
 --- Get the PSR-4 application namespace.
@@ -573,7 +556,7 @@ end
 --- @param cwd string|nil
 --- @return boolean
 function M.is_laravel_project(cwd)
-  local root_dir = cwd or M.get_root_dir()
+  local root_dir = cwd or fs.get_root_dir()
   if not root_dir or root_dir == "" then
     root_dir = (uv and uv.cwd()) or vim.fn.getcwd() or "."
   end
