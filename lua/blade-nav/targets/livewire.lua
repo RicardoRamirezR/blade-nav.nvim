@@ -17,14 +17,7 @@ function M.get_target(context)
     return nil
   end
 
-  local ts_node = context.ts_node
-  if not ts_node then
-    log.debug("No TS node available in context.")
-    return nil
-  end
-
   local component_identifier = nil
-
   local directive_name, arguments = ts_utils.extract_first_blade_argument(line, "@livewire")
   log.debug(
     "Tried extract_first_blade_argument('@livewire'), got directive: '%s', args: %s",

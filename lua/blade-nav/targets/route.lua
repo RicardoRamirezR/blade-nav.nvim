@@ -111,7 +111,6 @@ end
 --- @param context BladeNavContext Context created by context.lua
 --- @return BladeNavTargetInfo|nil { type = "route", name = "route.name" } or nil
 function M.get_target(context)
-  require("blade-nav.core.config").get("debug", true)
   local line = context.line
   local col_1 = context.cursor_col_1 -- 1-based column
 
@@ -279,7 +278,6 @@ function M.resolve(target_info)
   local route_map = laravel_utils.get_route_list(route_name)
   if not route_map or not route_map[route_name] then
     log.warn("BladeNav Route: Route definition for '%s' not found.", route_name)
-    require("blade.core.config").get("debug", false)
     return false
   end
 

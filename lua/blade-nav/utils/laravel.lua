@@ -16,6 +16,9 @@ local primed = false
 local VIEW_DIRS = {
   "resources/views/",
 }
+local function escape_pattern(s)
+  return s:gsub("([^%w])", "%%%1")
+end
 
 --- Find all views names
 --- @param path string
@@ -342,7 +345,7 @@ function M.get_component_paths(component_identifier, custom_search_paths)
 
   -- 1. Calculate all potential standard paths
   local base_name = component_identifier:match("^([^.]+)") or component_identifier
-  local sub_path = component_identifier:gsub("^" .. base_name, ""):gsub("^%.", "/")
+  local sub_path = component_identifier:gsub("^" .. escape_pattern(base_name), ""):gsub("^%.", "/")
   local studly_case_name = base_name:gsub("%-([%w])", string.upper):gsub("^%l", string.upper)
 
   local class_file_path = "app/View/Components/" .. studly_case_name .. sub_path .. ".php"

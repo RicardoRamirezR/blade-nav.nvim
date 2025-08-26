@@ -10,6 +10,18 @@ M._handler_order = {}   -- Order of handler names
 M._handler_modules = {} -- Map name → module path for lazy require
 M._failed_handlers = {} -- Cache of handlers that failed to load
 
+local function normalize_choices(choices)
+  local normalized = {}
+  for i, choice in ipairs(choices) do
+    if tostring(choice):match("^" .. i .. ": ") then
+      table.insert(normalized, choice)
+    else
+      table.insert(normalized, i .. ": " .. choice)
+    end
+  end
+  return normalized
+end
+
 --- Register a target handler after it's required.
 --- @param name string
 --- @param handler table
@@ -120,6 +132,8 @@ function M.show_choices(title, choices)
     return
   end
 
+  choices = normalize_choices(choices)
+
   local ok, telescope = pcall(require, "telescope")
   if ok and telescope then
     local pickers = require("telescope.pickers")
@@ -138,7 +152,8 @@ function M.show_choices(title, choices)
               actions.close(prompt_bufnr)
               local selection = action_state.get_selected_entry()
               if selection and selection[1] then
-                vim.cmd("edit " .. vim.fn.fnameescape(selection[1]))
+                local filename = selection[1]:gsub("%d+: ", "")
+                vim.cmd("edit " .. vim.fn.fnameescape(filename))
               end
             end)
             return true
@@ -148,7 +163,8 @@ function M.show_choices(title, choices)
   else
     vim.ui.select(choices, { prompt = title }, function(choice)
       if choice then
-        vim.cmd("edit " .. vim.fn.fnameescape(choice))
+        local filename = choice:gsub("%d+: ", "")
+        vim.cmd("edit " .. vim.fn.fnameescape(filename))
       end
     end)
   end
