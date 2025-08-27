@@ -75,11 +75,15 @@ end
 
 function M.extract_php(node, bufnr)
   node = M.find_parent(node, function(n)
-    return n:type() == "php_statement"
+    return n:type() == "php_statement" or n:type() == "function_call_expression"
   end)
 
   if not node then
     return nil
+  end
+
+  if node:type() == "function_call_expression" then
+    return M.clean_text(M.node_text(node, bufnr))
   end
 
   for child in node:iter_children() do

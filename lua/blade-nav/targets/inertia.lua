@@ -29,7 +29,7 @@ function M.get_target(context)
   local found_keys_inertia = ts_utils.extract_php_function_keys(line, "inertia")
   log.debug("Found keys for 'inertia': %s", vim.inspect(found_keys_inertia))
 
-  if #found_keys_inertia == 1 then
+  if #found_keys_inertia >= 1 then
     local key_info = found_keys_inertia[1]
     return {
       type = "inertia",

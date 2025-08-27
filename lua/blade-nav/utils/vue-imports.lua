@@ -70,28 +70,44 @@ end
 
 local M = {}
 
----Get the tag name under the cursor
----@return string|nil tag_name Tag name or nil if not found
-function M.get_tag_name_under_cursor()
-  local ts_utils = require("nvim-treesitter.ts_utils")
-  local node = ts_utils.get_node_at_cursor()
+local function clean_text(text)
+  return text and text:gsub("^%s*(.-)%s*$", "%1") or nil
+end
 
-  while node do
-    if node:type() == "element" then
-      for child in node:iter_children() do
-        if child:type() == "start_tag" or child:type() == "self_closing_tag" then
-          for tag_name in child:iter_children() do
-            if tag_name:type() == "tag_name" then
-              return ts.get_node_text(tag_name, 0)
-            end
-          end
-        end
-      end
+local function find_tagname(node, src)
+  if node:type() == "tag_name" then
+    return ts.get_node_text(node, src)
+  end
+  for child in node:iter_children() do
+    local result = find_tagname(child, src)
+    if result then
+      return result
     end
-    node = node:parent()
+  end
+end
+
+---Get the tag name under the cursor
+---@param line text Line of text of the current expresion
+---@return string|nil tag_name Tag name or nil if not found
+function M.get_tag_name_for(line)
+  if not line or line == "" then
+    return nil
   end
 
-  return nil
+  local ok, parser = pcall(ts.get_string_parser, line, "html")
+  if not ok or not parser then
+    return nil
+  end
+
+  local tree = parser:parse()[1]
+  if not tree then
+    return nil
+  end
+
+  local root = tree:root()
+  local tagname = find_tagname(root, line)
+
+  return clean_text(tagname)
 end
 
 ---Analyze imports in a Vue file
@@ -176,20 +192,24 @@ local function resolve_imports(imports, jsconfig)
   end
 end
 
----Resolve the import path under the cursor
+---Resolve the import path
+---@param line text Line of text of the current expresion
 ---@return string|nil path Resolved path or nil if not found
-function M.resolve_path_under_cursor()
+function M.resolve_path_for(line)
   if not cache.imports then
     cache.imports = {}
   end
-  local tag_name = M.get_tag_name_under_cursor()
+
+  local tag_name = M.get_tag_name_for(line)
   if not tag_name then
     log.debug("No tag found under cursor")
     return nil
   end
+  log.debug("Tag name: %s", tag_name)
 
   local imports = analyze_imports()
   local jsconfig = read_jsconfig()
+  log.debug("Imports: %s", vim.inspect(imports))
 
   if jsconfig then
     resolve_imports(imports, jsconfig)
