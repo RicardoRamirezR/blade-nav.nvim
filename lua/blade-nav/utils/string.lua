@@ -70,6 +70,8 @@ function M.get_keyword_pattern()
     "view",
     "View::make",
     "Route::view",
+    "inertia",
+    "Inertia::render",
   }
 
   if vim.g.blade_nav and vim.g.blade_nav.include_routes == false then

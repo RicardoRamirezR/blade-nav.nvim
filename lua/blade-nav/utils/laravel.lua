@@ -16,36 +16,46 @@ local primed = false
 local VIEW_DIRS = {
   "resources/views/",
 }
-local function escape_pattern(s)
-  return s:gsub("([^%w])", "%%%1")
+
+local function escape_lua_pattern(s)
+  return (s:gsub("([^%w])", "%%%1"))
 end
 
 --- Find all views names
 --- @param path string
 --- @param exclude_dirs? table
 --- @return table
-local function find_views_names(path, exclude_dirs)
-  local cache_key = "find_view_names:" .. path
+local function find_views_names(path, extension, exclude_dirs)
+  extension = extension or "blade.php"
+
+  local cache_key = "find_view_names:" .. path .. ":" .. extension
   local cached = cache.get(cache_key)
   if cached then
     return cached
   end
 
-  local result = fs.find_files(path, "blade.php", exclude_dirs)
+  -- Find files ending with the extension
+  local result = fs.find_files(path, extension, exclude_dirs)
   if not result then
     return {}
   end
 
   local views = {}
+  local ext_pattern = "%." .. escape_lua_pattern(extension) .. "$"
+
   for _, filename in ipairs(result) do
     local view = filename:match(path .. "(.+)")
     if view then
-      view = view:gsub("^/", ""):gsub("%.blade%.php$", ""):gsub("/", ".")
+      view = view:gsub("^/", ""):gsub(ext_pattern, ""):gsub("/", ".")
       table.insert(views, view)
     end
   end
 
   return cache.set(cache_key, views)
+end
+
+local function find_inertia()
+  return find_views_names("resources/js/Pages", "vue")
 end
 
 --- Find all components view
@@ -69,7 +79,7 @@ end
 --- Find all views excliding livewire abd Laravel components
 --- @return table
 local function find_views()
-  return find_views_names("resources/views", { "resources/views/livewire", "resources/views/components" })
+  return find_views_names("resources/views", nil, { "resources/views/livewire", "resources/views/components" })
 end
 
 --- Get PSR-4 mappings from composer.json.
@@ -345,7 +355,7 @@ function M.get_component_paths(component_identifier, custom_search_paths)
 
   -- 1. Calculate all potential standard paths
   local base_name = component_identifier:match("^([^.]+)") or component_identifier
-  local sub_path = component_identifier:gsub("^" .. escape_pattern(base_name), ""):gsub("^%.", "/")
+  local sub_path = component_identifier:gsub("^" .. escape_lua_pattern(base_name), ""):gsub("^%.", "/")
   local studly_case_name = base_name:gsub("%-([%w])", string.upper):gsub("^%l", string.upper)
 
   local class_file_path = "app/View/Components/" .. studly_case_name .. sub_path .. ".php"
@@ -516,20 +526,24 @@ end
 --- @return number, table
 M.get_view_names = function(input, not_include_closing_tag)
   local patterns = {
-    { pattern = "to_route%(",    tpl = "to_route('%s')",           ft = { "blade", "php" }, fn = find_routes },
-    { pattern = "route%(",       tpl = "route('%s')",              ft = { "blade", "php" }, fn = find_routes },
-    { pattern = "<x%-",          tpl = "<x-%s />",                 ft = "blade",            fn = find_components },
-    { pattern = "<livewire",     tpl = "<livewire:%s />",          ft = "blade",            fn = find_livewire },
-    { pattern = "@component%(",  tpl = "@component('%s')",         ft = "blade",            fn = find_views },
-    { pattern = "@extends%(",    tpl = "@extends('%s')",           ft = "blade",            fn = find_views },
-    { pattern = "@include%(",    tpl = "@include('%s')",           ft = "blade",            fn = find_views },
-    { pattern = "@livewire%(",   tpl = "@livewire('%s')",          ft = "blade",            fn = find_livewire },
-    { pattern = "Route::view%(", tpl = "Route::view('uri', '%s')", ft = "php",              fn = find_views },
-    { pattern = "View::make%(",  tpl = "View::make('%s')",         ft = "php",              fn = find_views },
-    { pattern = "view%(",        tpl = "view('%s')",               ft = "php",              fn = find_views },
+    { pattern = "to_route%(",        tpl = "to_route('%s')",           ft = { "blade", "php" }, fn = find_routes },
+    { pattern = "route%(",           tpl = "route('%s')",              ft = { "blade", "php" }, fn = find_routes },
+    { pattern = "<x%-",              tpl = "<x-%s />",                 ft = "blade",            fn = find_components },
+    { pattern = "<livewire",         tpl = "<livewire:%s />",          ft = "blade",            fn = find_livewire },
+    { pattern = "@component%(",      tpl = "@component('%s')",         ft = "blade",            fn = find_views },
+    { pattern = "@extends%(",        tpl = "@extends('%s')",           ft = "blade",            fn = find_views },
+    { pattern = "@include%(",        tpl = "@include('%s')",           ft = "blade",            fn = find_views },
+    { pattern = "@livewire%(",       tpl = "@livewire('%s')",          ft = "blade",            fn = find_livewire },
+    { pattern = "Route::view%(",     tpl = "Route::view('uri', '%s')", ft = "php",              fn = find_views },
+    { pattern = "View::make%(",      tpl = "View::make('%s')",         ft = "php",              fn = find_views },
+    { pattern = "view%(",            tpl = "view('%s')",               ft = "php",              fn = find_views },
+    { pattern = "inertia%(",         tpl = "inertia('%s')",            ft = "php",              fn = find_inertia },
+    { pattern = "Inertia::render%(", tpl = "Inertia::render('%s')",    ft = "php",              fn = find_inertia },
   }
   local index
   local items = {}
+  require("blade-nav.core.config").get("debug", true)
+  log.debug("get_view_names called with input: %s", input)
   for i, p in ipairs(patterns) do
     if input:match(p.pattern) and tbl.contains(p.ft, vim.bo.filetype) then
       local names = p.fn()
