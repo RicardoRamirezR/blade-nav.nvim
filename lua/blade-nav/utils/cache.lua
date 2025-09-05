@@ -1,7 +1,8 @@
 -- lua/blade-nav/utils/cache.lua
+
 local uv = vim.loop
-local log = require("blade-nav.utils.log")
 local config = require("blade-nav.core.config")
+local log = require("blade-nav.utils.log")
 
 local M = {}
 local cache_store = {}

@@ -1,2 +1,2 @@
--- lua/blade-nav/health.lua
+--- lua/blade-nav/health.lua
 return require("blade-nav.integrations.health")

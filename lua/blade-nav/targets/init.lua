@@ -4,11 +4,10 @@ local uv = vim.loop
 
 local M = {}
 
--- Internal registries
-M._handlers = {}        -- Loaded handler modules
-M._handler_order = {}   -- Order of handler names
-M._handler_modules = {} -- Map name → module path for lazy require
-M._failed_handlers = {} -- Cache of handlers that failed to load
+M._handlers = {}
+M._handler_order = {}
+M._handler_modules = {}
+M._failed_handlers = {}
 
 local function normalize_choices(choices)
   local normalized = {}
@@ -44,7 +43,7 @@ local function ensure_handler_loaded(name)
     return true
   end
   if M._failed_handlers[name] then
-    return false -- Skip known bad handler
+    return false
   end
   local module_path = M._handler_modules[name]
   if not module_path then
@@ -54,11 +53,11 @@ local function ensure_handler_loaded(name)
   if ok and mod then
     register_handler(name, mod)
     return true
-  else
-    log.error("Failed to load target handler '%s' (%s): %s", name, module_path, tostring(mod))
-    M._failed_handlers[name] = true
-    return false
   end
+
+  log.error("Failed to load target handler '%s' (%s): %s", name, module_path, tostring(mod))
+  M._failed_handlers[name] = true
+  return false
 end
 
 --- Discover handler files in a directory.
@@ -83,6 +82,7 @@ local function discover_handlers(handler_dir_path)
     end
     name, ftype = uv.fs_scandir_next(handle)
   end
+
   return handler_names
 end
 
@@ -175,28 +175,45 @@ end
 --- @return boolean
 function M.resolve_target(context)
   log.debug("Starting target resolution")
+
   for _, name in ipairs(M._handler_order) do
-    if ensure_handler_loaded(name) then
-      local handler = M._handlers[name]
-      local ok, result = pcall(handler.get_target, context)
-      if ok and result then
-        log.debug("Handler '%s' matched target: %s", name, vim.inspect(result))
-        if result.choices and #result.choices > 0 then
-          M.show_choices("Select " .. (result.type or "target"), result.choices)
-          return true
-        elseif result.resolved == true then
-          return true
-        elseif type(handler.resolve) == "function" then
-          local rok, rres = pcall(handler.resolve, result)
-          if rok and rres == true then
-            return true
-          end
-        end
-      elseif not ok then
-        log.error("Handler '%s' error: %s", name, tostring(result))
+    if not ensure_handler_loaded(name) then
+      goto continue
+    end
+
+    local handler = M._handlers[name]
+    local ok, result = pcall(handler.get_target, context)
+
+    if not ok then
+      log.error("Handler '%s' error: %s", name, tostring(result))
+      goto continue
+    end
+
+    if not result then
+      goto continue
+    end
+
+    log.debug("Handler '%s' matched target: %s", name, vim.inspect(result))
+
+    if result.choices and #result.choices > 0 then
+      M.show_choices("Select " .. (result.type or "target"), result.choices)
+      return true
+    end
+
+    if result.resolved == true then
+      return true
+    end
+
+    if type(handler.resolve) == "function" then
+      local rok, rres = pcall(handler.resolve, result)
+      if rok and rres == true then
+        return true
       end
     end
+
+    ::continue::
   end
+
   log.debug("No handler matched")
   return false
 end

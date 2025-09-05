@@ -1,17 +1,18 @@
 -- lua/blade-nav/utils/laravel.lua
 local uv = vim.loop
-local fs = require("blade-nav.utils.fs")
-local cmd = require("blade-nav.utils.cmd")
+
 local cache = require("blade-nav.utils.cache")
+local cmd = require("blade-nav.utils.cmd")
+local config_keys = require("blade-nav.extractors.config")
+local debounce = require("blade-nav.utils.debounce")
+local env_keys = require("blade-nav.extractors.env")
+local fs = require("blade-nav.utils.fs")
 local log = require("blade-nav.utils.log")
 local tbl = require("blade-nav.utils.table")
-local debounce = require("blade-nav.utils.debounce")
+
+local primed = false
 
 local M = {}
-
-local routes_watcher = nil
-local route_cache_watcher = nil
-local primed = false
 
 local VIEW_DIRS = {
   "resources/views/",
@@ -34,7 +35,6 @@ local function find_views_names(path, extension, exclude_dirs)
     return cached
   end
 
-  -- Find files ending with the extension
   local result = fs.find_files(path, extension, exclude_dirs)
   if not result then
     return {}
@@ -58,12 +58,26 @@ local function find_inertia()
   return find_views_names("resources/js/Pages", "vue")
 end
 
+--- Find all config keys
+--- @return table
+local function find_config()
+  local root = fs.get_root_dir()
+  return config_keys.get_keys(root)
+end
+
 --- Find all components view
 --- @return table
 local function find_components()
   return find_views_names("resources/views/components")
 end
----
+
+--- Find all config keys
+--- @return table
+local function find_env()
+  local root = fs.get_root_dir()
+  return env_keys.get_keys(root)
+end
+
 --- Find all livewire views
 --- @return table
 local function find_livewire()
@@ -116,7 +130,7 @@ end
 -- Invalidate *all* cached routes
 function M.invalidate_routes_cache()
   log.debug("Invalidating all cached routes")
-  cache.clear_prefix("route_list:") -- needs support in cache module
+  cache.clear_prefix("route_list:")
 end
 
 local debounced_invalidate = debounce(function()
@@ -126,7 +140,7 @@ end, 200)
 -- Watch the bootstrap/cache dir and attach to any routes-v*.php file
 local function watch_route_cache()
   if route_cache_watcher then
-    return -- already watching
+    return
   end
 
   local handle, err = uv.new_fs_event()
@@ -144,7 +158,6 @@ local function watch_route_cache()
       return
     end
 
-    -- Only care about routes-v*.php files
     if fname and fname:match("^routes%-v%d+%.php$") then
       vim.schedule(function()
         local file_path = "bootstrap/cache/" .. fname
@@ -263,7 +276,6 @@ function M.get_route_list(route_name)
     return {}
   end
 
-  -- Ensure watcher started
   watch_routes_dir()
   watch_route_cache()
 
@@ -305,10 +317,10 @@ function M.normalize_view_name(view_name)
     return nil
   end
 
-  local normalized = view_name:gsub("%.blade%.php$", "") -- Remove .blade.php if present
-  normalized = normalized:gsub("%.", "/")                -- Convert dots to slashes
+  local normalized = view_name:gsub("%.blade%.php$", "")
+  normalized = normalized:gsub("%.", "/")
   if not normalized:match("%.blade%.php$") then
-    normalized = normalized .. ".blade.php"              -- Ensure .blade.php suffix
+    normalized = normalized .. ".blade.php"
   end
   return normalized
 end
@@ -353,7 +365,6 @@ function M.get_component_paths(component_identifier, custom_search_paths)
     return final_choices
   end
 
-  -- 1. Calculate all potential standard paths
   local base_name = component_identifier:match("^([^.]+)") or component_identifier
   local sub_path = component_identifier:gsub("^" .. escape_lua_pattern(base_name), ""):gsub("^%.", "/")
   local studly_case_name = base_name:gsub("%-([%w])", string.upper):gsub("^%l", string.upper)
@@ -364,30 +375,25 @@ function M.get_component_paths(component_identifier, custom_search_paths)
 
   local all_standard_paths = {
     anon_view_path,
-    anon_index_path, -- Check index path existence
+    anon_index_path,
     class_file_path,
   }
 
-  -- 2. Check for existence of standard paths
   local existing_standard_paths = {}
   for _, path in ipairs(all_standard_paths) do
-    -- Special check for index path: directory must exist and contain index.blade.php
     if path == anon_index_path then
       local dir_path = path:gsub("/index%.blade%.php$", "")
       if fs.path_exists(dir_path) and fs.is_dir(dir_path) and fs.path_exists(path) and not fs.is_dir(path) then
         table.insert(existing_standard_paths, path)
       end
     else
-      -- Check regular file paths
       if fs.path_exists(path) and not fs.is_dir(path) then
         table.insert(existing_standard_paths, path)
       end
     end
   end
 
-  -- 3. Determine final choices based on existence
   if #existing_standard_paths > 0 then
-    -- If any standard path exists, return only the existing ones.
     log.debug(
       "Component '%s' has %d existing standard path(s). Returning them.",
       component_identifier,
@@ -395,44 +401,30 @@ function M.get_component_paths(component_identifier, custom_search_paths)
     )
     final_choices = existing_standard_paths
   else
-    -- If no standard paths exist, return all standard paths + creation command.
     log.debug(
       "Component '%s' has no existing standard paths. Returning all options including creation.",
       component_identifier
     )
-    -- Add standard paths to choices
     for _, path in ipairs(all_standard_paths) do
       table.insert(final_choices, path)
     end
-    -- Add creation command
     local pascal_case_component = base_name:gsub("%-([%w])", string.upper):gsub("^%l", string.upper)
     local make_command = "php artisan make:component " .. pascal_case_component
     table.insert(final_choices, make_command)
   end
 
-  -- 4. Handle Custom Search Paths (if applicable)
-  -- This part can be expanded if custom paths need specific existence checks or inclusion logic.
-  -- For now, let's add them if they exist, or maybe always add them if configured?
-  -- This depends on the exact desired behavior for custom paths.
-  -- For simplicity, let's add existing custom paths to the existing list.
   if #existing_standard_paths > 0 then
-    -- If standard paths exist, also check custom paths for existence and add them if found
     for _, custom_base_path in ipairs(custom_search_paths) do
       local normalized_custom_path = custom_base_path:gsub("/$", "")
       local custom_view_path = normalized_custom_path
           .. "/components/"
           .. component_identifier:gsub("%.", "/")
           .. ".blade.php"
-      -- Check if this custom path exists
       if fs.path_exists(custom_view_path) and not fs.is_dir(custom_view_path) then
         table.insert(final_choices, custom_view_path)
       end
-      -- Potentially check for custom index paths too
     end
   end
-  -- If no standard paths exist, custom paths are likely also non-existent,
-  -- so adding them might not be necessary unless the user wants them as potential locations.
-  -- The primary logic for "not found" is handled above with the 4 standard options + command.
 
   log.debug("Final choices for component '%s': %s", component_identifier, vim.inspect(final_choices))
   return final_choices
@@ -486,7 +478,7 @@ function M.psr4_app()
       return namespace
     end
   end
-  return "App\\" -- Default fallback
+  return "App\\"
 end
 
 --- Modify namespace in content.
@@ -504,8 +496,8 @@ end
 --- Get the BladeNav.php filename.
 --- @return string
 function M.get_blade_nav_filename()
-  local script_path = debug.getinfo(1, "S").source:sub(2)    -- Remove the '@'
-  local script_dir = vim.fn.fnamemodify(script_path, ":p:h") -- Get directory of this file
+  local script_path = debug.getinfo(1, "S").source:sub(2)
+  local script_dir = vim.fn.fnamemodify(script_path, ":p:h")
   return script_dir .. "/../../BladeNav.php"
 end
 
@@ -516,7 +508,6 @@ function M.kebab_to_pascal(input)
   if not input then
     return ""
   end
-  -- Capitalize first letter and letters after hyphens, remove hyphens
   local result = input:gsub("^%l", string.upper):gsub("%-(%w)", string.upper)
   return result
 end
@@ -539,6 +530,8 @@ M.get_view_names = function(input, not_include_closing_tag)
     { pattern = "view%(",            tpl = "view('%s')",               ft = "php",              fn = find_views },
     { pattern = "inertia%(",         tpl = "inertia('%s')",            ft = "php",              fn = find_inertia },
     { pattern = "Inertia::render%(", tpl = "Inertia::render('%s')",    ft = "php",              fn = find_inertia },
+    { pattern = "config%(",          tpl = "config('%s')",             ft = { "blade", "php" }, fn = find_config },
+    { pattern = "env%(",             tpl = "env('%s')",                ft = { "blade", "php" }, fn = find_env },
   }
   local index
   local items = {}

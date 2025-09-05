@@ -116,7 +116,6 @@ end
 local function analyze_imports(bufnr)
   bufnr = bufnr or api.nvim_get_current_buf()
 
-  -- Check cache first
   local cache_key = tostring(bufnr)
   if cache.imports[cache_key] then
     return cache.imports[cache_key].data
@@ -140,7 +139,6 @@ local function analyze_imports(bufnr)
     end
   end
 
-  -- Update cache
   cache.imports[cache_key] = {
     data = imports,
     timestamp = now,

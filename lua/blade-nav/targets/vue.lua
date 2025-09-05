@@ -1,5 +1,7 @@
-local vue_imports = require("blade-nav.utils.vue-imports")
+-- /lua/blade-nav/targets/vue.lua
+
 local log = require("blade-nav.utils.log")
+local vue_imports = require("blade-nav.utils.vue-imports")
 
 local M = {}
 

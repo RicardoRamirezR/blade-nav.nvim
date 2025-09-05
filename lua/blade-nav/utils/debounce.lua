@@ -1,4 +1,4 @@
--- utils/debounce.lua
+-- lua/blade-nav/utils/debounce.lua
 local uv = vim.loop
 
 local function debounce(fn, ms)

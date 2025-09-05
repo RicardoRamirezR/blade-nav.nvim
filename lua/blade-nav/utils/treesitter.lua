@@ -57,11 +57,11 @@ end
 --- @return table List of string values.
 local function php_array_to_lua(text)
   local items = {}
-  -- Match single-quoted strings within the array
+
   for str in text:gmatch("'([^']*)'") do
     table.insert(items, str)
   end
-  -- Match double-quoted strings within the array (basic)
+
   for str in text:gmatch('"([^"]*)"') do
     table.insert(items, str)
   end
@@ -80,9 +80,7 @@ function M.extract_first_blade_argument(line_text, target_fn)
     return nil, nil
   end
 
-  -- Transform Blade directive into synthetic PHP code for parsing
-  -- e.g., "@extends('layout')" -> "<?php blade_extends('layout');"
-  local php_function_name = "blade_" .. directive:sub(2) -- Remove @, prepend blade_
+  local php_function_name = "blade_" .. directive:sub(2)
   local php_code = "<?php\n" .. line_text:gsub("^%s*" .. directive:gsub("%p", "%%%0"), php_function_name) .. ";"
   log.debug("Synthetic PHP code for parsing '%s': %s", directive, php_code)
 
@@ -103,7 +101,6 @@ function M.extract_first_blade_argument(line_text, target_fn)
 
   local result = {}
 
-  -- Query to find the first argument (string or array)
   local ok_query_main, query_main = pcall(
     vim.treesitter.query.parse,
     "php",
@@ -126,7 +123,7 @@ function M.extract_first_blade_argument(line_text, target_fn)
   )
   if not ok_query_main or not query_main then
     log.debug("TS PHP main query parsing failed. Error: %s", tostring(query_main))
-    return directive, result -- Return directive, empty result
+    return directive, result
   end
 
   local found_first = false
@@ -152,10 +149,9 @@ function M.extract_first_blade_argument(line_text, target_fn)
     end
     if found_first then
       break
-    end -- Stop after finding the first relevant capture
+    end
   end
 
-  -- Special case: extract 4th arg of @each (empty view)
   if directive == "@each" then
     local ok_query_each, query_each = pcall(
       vim.treesitter.query.parse,
@@ -188,7 +184,7 @@ end
 --- Extracts Blade component names from a line using Tree-sitter.
 --- Based directly on the provided research code.
 --- @param line_text string The line of text to parse.
---- @return table List of component identifiers found (e.g., { "input.date", "button" }).
+--- @return string|nil The extracted component name or nil if not found.
 function M.extract_component(line_text, target_name)
   log.debug("Extracting component names from line: %s, target: %s", line_text, target_name)
   local parser = vim.treesitter.get_string_parser(line_text, "html")
@@ -230,15 +226,12 @@ function M.extract_component(line_text, target_name)
     local text = vim.treesitter.get_node_text(node, line_text)
 
     if name == "tag_name" then
-      -- Inicializamos el nombre base quitando el prefijo x-
       current_tag = text:gsub("^x%-", "")
     elseif name == "attribute" and text:sub(1, 1) == "." then
-      -- Añadimos los atributos que empiezan por "."
-      table.insert(parts, text:sub(2)) -- quitamos el punto inicial
+      table.insert(parts, text:sub(2))
     end
   end
 
-  -- Si hay atributos con punto, los concatenamos
   if current_tag and #parts > 0 then
     return current_tag .. "." .. table.concat(parts, ".")
   end
@@ -344,8 +337,8 @@ function M.gets_root_and_lang()
     return nil, nil
   end
 
-  local bufnr = 0                                                                   -- 0 for current buffer
-  local lang = ts.language.get_lang(vim.api.nvim_buf_get_option(bufnr, "filetype")) -- Get language
+  local bufnr = 0
+  local lang = ts.language.get_lang(vim.api.nvim_buf_get_option(bufnr, "filetype"))
   if not lang then
     log.warn("BladeNav Route (goto_method): Could not determine language for current buffer.")
     return nil, nil
@@ -354,7 +347,7 @@ function M.gets_root_and_lang()
   local parser = ts.get_parser(bufnr, lang)
   if not parser then
     log.warn("BladeNav Route (goto_method): Could not get TS parser for buffer %d lang %s.", bufnr, lang)
-    return nil, lang -- Return lang even if parser fails?
+    return nil, lang
   end
 
   local tree = parser:parse()[1]

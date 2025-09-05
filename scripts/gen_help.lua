@@ -4,10 +4,10 @@
 local infile = "README.md"
 local outfile = "doc/blade-nav.txt"
 
--- read readme
+--- read readme
 local readme_lines = {}
 for l in io.lines(infile) do
-  l = l:gsub("^#%s+", ""):gsub("^##%s+", "") -- strip markdown headers
+  l = l:gsub("^#%s+", ""):gsub("^##%s+", "")
   table.insert(readme_lines, l)
 end
 
@@ -18,10 +18,10 @@ for _, l in ipairs(readme_lines) do
 end
 table.insert(generated, "\nvim:tw=78:ts=8:ft=help:norl:\n")
 
--- join
+--- join
 local generated_text = table.concat(generated, "\n")
 
--- read existing file if present
+--- read existing file if present
 local existing_text = nil
 do
   local f = io.open(outfile, "r")
@@ -31,14 +31,13 @@ do
   end
 end
 
--- compare
+--- compare
 if existing_text ~= generated_text then
-  -- overwrite file
   local f = io.open(outfile, "w")
   f:write(generated_text)
   f:close()
   io.stderr:write("doc/blade-nav.txt was outdated. Regenerated.\n")
-  os.exit(1) -- fail CI if file needed regeneration
+  os.exit(1)
 else
   print("doc/blade-nav.txt is up to date.")
 end

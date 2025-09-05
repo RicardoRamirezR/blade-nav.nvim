@@ -1,9 +1,7 @@
 -- lua/blade-nav/core/config.lua
 
--- local log = require("blade-nav.utils.log")
-
 local M = {}
-local cache = {} -- Simple cache for the merged config
+local cache = {}
 
 local schema = {
   enable = "boolean",
@@ -13,6 +11,7 @@ local schema = {
   laravel_components_paths = "table",
   handlers = "table",
   integrations = "table",
+  annotations = "table",
 }
 
 local function validate(config)
@@ -39,7 +38,7 @@ end
 --- @type BladeNavConfig
 local default_config = {
   enable = true,
-  cache_timeout = 50000, -- 5 seconds
+  cache_timeout = 50000,
   debug = false,
   jsconfig_path = "./jsconfig.json",
   close_tag_on_complete = true,
@@ -62,6 +61,15 @@ local default_config = {
     gf = true,
     health = true,
   },
+  annotations = {
+    show = false,
+    hl = "Comment",
+    prefix = " ⟶ ",
+    max_len = 160,
+    debounce_ms = 120,
+    show_on_load = true,
+    create_keymaps = true,
+  },
 }
 
 --- Merges user-provided options with defaults and handles legacy global config.
@@ -72,37 +80,19 @@ local default_config = {
 local function merge_config_with_legacy(user_opts)
   user_opts = user_opts or {}
 
-  -- Start with the default configuration
   local merged_config = vim.deepcopy(default_config)
 
-  -- 1. Merge user-provided options on top of defaults
-  -- This handles the standard setup({ ... }) call
   merged_config = vim.tbl_deep_extend("force", merged_config, user_opts)
 
-  -- 2. Handle Legacy Global Config Fallback (vim.g.blade_nav)
-  -- Check if vim.g.blade_nav exists and is a table
   local legacy_global_config = vim.g.blade_nav
   if type(legacy_global_config) == "table" then
-    -- >>>>>>>>>> ADDED: Check for global 'enable' flag <<<<<<<<<<
-    -- If the user did NOT provide 'enable' in setup({...})
-    -- AND the legacy 'enable' is a boolean, use it.
     local legacy_enable = legacy_global_config.enable
     if type(legacy_enable) == "boolean" and user_opts.enable == nil then
       merged_config.enable = legacy_enable
-      -- Log this application if debug is enabled in *default* config
-      -- (since user config might not be fully merged yet for their debug setting)
-      if default_config.debug then
-        -- log.debug("[BladeNav Debug] Applied legacy global enable flag: %s", tostring(legacy_enable))
-      end
     end
-    -- >>>>>>>>>> END ADDED <<<<<<<<<<
 
-    -- Check specifically for the legacy 'laravel_components' key
     local legacy_laravel_components = legacy_global_config.laravel_components
 
-    -- If the user did NOT provide 'laravel_components_paths' in setup({...})
-    -- AND the legacy 'laravel_components' is a table, use it as the default.
-    -- This prioritizes the new config option if explicitly set.
     if
         type(legacy_laravel_components) == "table"
         and (not user_opts.laravel_components_paths or vim.tbl_isempty(user_opts.laravel_components_paths))
@@ -112,25 +102,15 @@ local function merge_config_with_legacy(user_opts)
         print("[BladeNav Debug] Applied legacy global laravel_components_paths.")
       end
     end
-
-    -- Add similar logic for other legacy global options if needed
-    -- Example for a hypothetical 'include_routes':
-    -- local legacy_include_routes = legacy_global_config.include_routes
-    -- if type(legacy_include_routes) == "boolean" and user_opts.include_routes == nil then
-    --     merged_config.include_routes = legacy_include_routes
-    -- end
   end
 
-  -- 3. Ensure laravel_components_paths is always a table
   if type(merged_config.laravel_components_paths) ~= "table" then
     merged_config.laravel_components_paths = {}
   end
 
-  -- 4. Normalize paths in laravel_components_paths (ensure trailing slash)
   local normalized_paths = {}
   for _, path in ipairs(merged_config.laravel_components_paths) do
     if type(path) == "string" and path ~= "" then
-      -- Remove trailing slashes and add one back for consistency
       local normalized_path = path:gsub("/+$", "") .. "/"
       table.insert(normalized_paths, normalized_path)
     end
@@ -146,12 +126,14 @@ function M.setup(user_config)
   if cache.merged then
     return cache.merged
   end
-  -- Use the new merging function that includes legacy support
+
   cache.merged = merge_config_with_legacy(user_config)
   validate(cache.merged)
 end
 
 --- Get the current configuration.
+--- @param key? string Key to retrieve.
+--- @param value? any Value to set.
 --- @return BladeNavConfig|string
 function M.get(key, value)
   if key and value then
@@ -160,7 +142,7 @@ function M.get(key, value)
   if key then
     return cache.merged[key]
   end
-  -- Return the cached merged configuration
+
   return cache.merged or {}
 end
 

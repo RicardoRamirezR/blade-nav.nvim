@@ -9,32 +9,29 @@ local function extract_function_name(info)
     return info.name
   end
 
-  -- Try to extract function name from source code
   local source_file = info.source
   if source_file:sub(1, 1) == "@" then
-    source_file = source_file:sub(2) -- Remove @ prefix
+    source_file = source_file:sub(2)
 
-    -- Try to read the line where function is defined
     local file = io.open(source_file, "r")
     if file then
       local line_num = 1
       for line in file:lines() do
         if line_num == info.linedefined then
-          -- Match various function definition patterns
           local patterns = {
-            "function%s+([%w_%.]+)%s*%(",               -- function name()
-            "function%s+([%w_]+):([%w_]+)%s*%(",        -- function class:method()
-            "([%w_]+)%s*=%s*function%s*%(",             -- name = function()
-            "([%w_%.]+)%.([%w_]+)%s*=%s*function%s*%(", -- table.name = function()
+            "function%s+([%w_%.]+)%s*%(",
+            "function%s+([%w_]+):([%w_]+)%s*%(",
+            "([%w_]+)%s*=%s*function%s*%(",
+            "([%w_%.]+)%.([%w_]+)%s*=%s*function%s*%(",
           }
 
           for _, pattern in ipairs(patterns) do
             local match1, match2 = line:match(pattern)
             if match1 then
               if match2 then
-                return match1 .. ":" .. match2             -- For method definitions
+                return match1 .. ":" .. match2
               else
-                return match1:match("([^%.]+)$") or match1 -- Get last part after dots
+                return match1:match("([^%.]+)$") or match1
               end
             end
           end
@@ -75,13 +72,11 @@ function M.debug(msg, ...)
   local formatted_msg = msg
 
   if #args > 0 then
-    -- Count format specifiers in the message
     local format_count = 0
     for _ in msg:gmatch("%%[sdqfgGeioxXc]") do
       format_count = format_count + 1
     end
 
-    -- Format the message with the appropriate number of arguments
     if format_count > 0 and format_count <= #args then
       local format_args = {}
       for i = 1, format_count do
@@ -89,7 +84,6 @@ function M.debug(msg, ...)
       end
       formatted_msg = string.format(msg, unpack(format_args))
 
-      -- If there are extra arguments, inspect and append them
       if #args > format_count then
         local extra_parts = {}
         for i = format_count + 1, #args do
@@ -98,7 +92,6 @@ function M.debug(msg, ...)
         formatted_msg = formatted_msg .. " " .. table.concat(extra_parts, " ")
       end
     else
-      -- If no format specifiers or mismatch, just append all args as inspected
       local arg_parts = {}
       for _, arg in ipairs(args) do
         table.insert(arg_parts, vim.inspect(arg))

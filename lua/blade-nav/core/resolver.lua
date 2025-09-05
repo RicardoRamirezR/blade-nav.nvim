@@ -9,7 +9,6 @@ local M = {}
 --- @return BladeNavTargetInfo | nil
 function M.resolve(context)
   log.debug("Starting resolution process.")
-  -- Iterate through handlers in the defined order
   for _, handler_name in ipairs(targets._handler_order) do
     local handler = targets._handlers[handler_name]
     if handler and type(handler.get_target) == "function" then
@@ -20,7 +19,6 @@ function M.resolve(context)
       elseif not ok then
         log.error("Handler '%s' failed with error: %s", handler_name, tostring(result))
       else
-        -- ok is true, but result is nil, meaning handler didn't match. Continue.
         log.debug("Handler '%s' did not match context.", handler_name)
       end
     else

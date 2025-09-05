@@ -12,7 +12,6 @@ function M.explode(delimiter, text)
   if not text or text == "" then
     return result
   end
-  -- Escape special regex characters in delimiter
   local pattern = string.format("([^%s]+)", delimiter:gsub("([^%w])", "%%%1"))
   for match in string.gmatch(text, pattern) do
     table.insert(result, match)
@@ -27,7 +26,6 @@ function M.kebab_to_pascal(input)
   if not input then
     return ""
   end
-  -- Capitalize first letter and letters after hyphens, remove hyphens
   local result = input:gsub("^%l", string.upper):gsub("%-(%w)", string.upper)
   return result
 end
@@ -65,6 +63,8 @@ function M.get_keyword_pattern()
     "@extends",
     "@include",
     "@livewire",
+    "config",
+    "env",
     "route",
     "to_route",
     "view",
@@ -89,8 +89,6 @@ end
 --- @param input string
 --- @return string
 function M.extract_inner_function(input)
-  -- Simplified version - return input as is or apply basic trimming
-  -- The complex logic should ideally be in ts_utils or the specific handler.
   if not input or type(input) ~= "string" then
     return ""
   end

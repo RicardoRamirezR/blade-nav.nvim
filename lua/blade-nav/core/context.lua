@@ -32,10 +32,9 @@ function M.create()
     cursor_row_1 = cursor[1],
     cursor_col_1 = cursor[2] + 1,
     char_under_cursor = char_under_cursor,
-    ts_node = nil, -- si quieres, puedes seguir guardando el raw node
+    ts_node = nil,
   }
 
-  -- usar nuevo módulo
   local ok, extracted = pcall(textnode.get_text_node)
   if ok and extracted then
     context.line = extracted

@@ -3,7 +3,6 @@
 
 local fs = require("blade-nav.utils.fs")
 local cmd = require("blade-nav.utils.cmd")
-local log = require("blade-nav.utils.log")
 local config_module = require("blade-nav.core.config")
 local laravel = require("blade-nav.utils.laravel")
 local cache = require("blade-nav.utils.cache")
@@ -46,20 +45,22 @@ end
 --------------------------------------------------------------------------------
 -- Tree-sitter
 --------------------------------------------------------------------------------
+local function parser_installed(lang)
+  local ok_parser = pcall(function()
+    vim.treesitter.language.add(lang, { force = false })
+  end)
+  return ok_parser
+end
+
 local function check_treesitter()
   start("Tree-sitter")
 
-  local ts_status, ts_parsers = pcall(require, "nvim-treesitter.parsers")
-  if not ts_status then
-    error("nvim-treesitter not available")
-    return
-  end
-
   local required_langs = { "php", "blade", "vue", "html" }
   local missing = {}
+
   for _, lang in ipairs(required_langs) do
-    if ts_parsers.has_parser(lang) then
-      ok("Parser for '" .. lang .. "' installed")
+    if parser_installed(lang) then
+      ok("Parser for '" .. lang .. "' available")
     else
       table.insert(missing, lang)
     end
@@ -107,7 +108,6 @@ local function check_project_files()
     warn("Laravel heuristics failed: project may not be a Laravel app")
   end
 
-  -- Expected files
   if vim.loop.fs_stat(root_dir .. "/composer.json") then
     ok("composer.json found")
   else
@@ -132,7 +132,6 @@ end
 local function check_blade_command()
   start("BladeNav Artisan Command")
 
-  -- Purpose explanation
   ok("Purpose: provides component aliases from external packages via `blade-nav:components-aliases`")
 
   local root = fs.get_root_dir()
@@ -157,9 +156,8 @@ local function check_blade_command()
     return
   end
 
-  -- If installed, check sync
   local source = laravel.get_blade_nav_filename()
-  local local_blade, err = laravel.read_file(source)
+  local local_blade, err = fs.read_file(source)
   if not local_blade then
     warn("Could not read BladeNav.php source: " .. err)
     return

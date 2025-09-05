@@ -1,23 +1,21 @@
 -- lua/blade-nav/targets/inertia.lua
 -- Target handler for Laravel inertia references like inertia('home'), to_inertia('user.profile').
 
-local log = require("blade-nav.utils.log")
-local ts_utils = require("blade-nav.utils.treesitter") -- Import the TS utility for inertias
-local fs = require("blade-nav.utils.fs")               -- Import Laravel utilities
-local extractor = require("blade-nav.utils.inertia-path-extractor")
 local cache = require("blade-nav.utils.cache")
+local extractor = require("blade-nav.utils.inertia-path-extractor")
+local fs = require("blade-nav.utils.fs")
+local log = require("blade-nav.utils.log")
+local ts_utils = require("blade-nav.utils.treesitter")
 
 local M = {}
 
---- Gets target information if the cursor is on a inertia reference.
---- Uses the line-based parsing utility function and specific pattern matching.
+--- Gets target information if the cursor is on an inertia reference.
 --- Supports inertia(), Interia::render().
 --- @param context BladeNavContext Context created by context.lua
 --- @return BladeNavTargetInfo|nil { type = "interia", name = "view.name" } or nil
 function M.get_target(context)
   local line = context.line
-  local col_1 = context.cursor_col_1 -- 1-based column
-  local filetype = context.filetype
+  local col_1 = context.cursor_col_1
 
   if not line or col_1 <= 0 then
     log.debug("Invalid line or cursor position.")
@@ -45,42 +43,35 @@ end
 local function read_app_file()
   local root = fs.get_root_dir()
 
-  -- Define possible file paths
   local possible_paths = {
     root .. "/resources/js/app.js",
     root .. "/resources/js/app.ts",
   }
 
-  -- Try to find and read the first available file
   for _, file_path in ipairs(possible_paths) do
     if vim.fn.filereadable(file_path) == 1 then
-      -- Read the file content
       local lines = {}
       for line in io.lines(file_path) do
         table.insert(lines, line)
       end
-      -- Combine all lines
       local content = table.concat(lines, "\n")
       return content, file_path
     end
   end
 
-  -- If no file is found, return error
   return nil, string.format("Neither app.js nor app.ts found in %s/resources/js/", root)
 end
 
 local function get_pages_path()
   local content, err = read_app_file()
   if not content then
-    -- Handle error or return default
     vim.notify("Failed to read app.js or app.ts: " .. (err or "unknown error"), vim.log.levels.WARN)
-    return "Pages" -- default fallback
+    return "Pages"
   end
 
   local pages_path = extractor.extract_pages_path(content)
   log.debug("Extracted Pages path: %s", pages_path)
   if not pages_path then
-    -- Handle case where pattern wasn't found
     vim.notify("Could not find Pages path in app.js, using default", vim.log.levels.INFO)
     return "Pages"
   end
@@ -100,7 +91,6 @@ local function get_path(page_name)
 end
 
 --- Resolves and opens/navigates to the inertia definition or associated controller.
---- Mirrors logic from working-version.txt's gf_inertias.lua.
 --- @param target_info BladeNavTargetInfo The target info returned by get_target.
 --- @return boolean True if successfully opened or action taken.
 function M.resolve(target_info)

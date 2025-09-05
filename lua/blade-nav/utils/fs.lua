@@ -20,7 +20,7 @@ function M.get_root_dir()
     root_dir = vim.fn.getcwd()
   end
 
-  root_dir = root_dir:gsub("[\r\n]+$", "") -- Trim trailing newlines
+  root_dir = root_dir:gsub("[\r\n]+$", "")
   if root_dir == "" then
     root_dir = vim.fn.getcwd()
   end
@@ -30,19 +30,19 @@ end
 
 --- Safely read a file.
 --- @param path string File path
---- @return string|nil File content or nil on error
+--- @return string|nil, string|boolean File content or nil on error
 function M.read_file(path)
   local ok, fd = pcall(uv.fs_open, path, "r", 438)
   if not ok or not fd then
     log.debug("Failed to open file for reading: %s", path)
-    return nil
+    return nil, "cannot open file"
   end
 
   local ok_stat, stat = pcall(uv.fs_fstat, fd)
   if not ok_stat or not stat then
     log.debug("Failed to stat file: %s", path)
     uv.fs_close(fd)
-    return nil
+    return nil, "cannot stat file"
   end
 
   local ok_read, data = pcall(uv.fs_read, fd, stat.size, 0)
@@ -50,10 +50,10 @@ function M.read_file(path)
 
   if not ok_read then
     log.debug("Failed to read file: %s", path)
-    return nil
+    return nil, "cannot read file"
   end
 
-  return data
+  return data, true
 end
 
 --- Write a file

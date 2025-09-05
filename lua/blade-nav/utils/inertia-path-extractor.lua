@@ -1,41 +1,33 @@
 -- lua/blade-nav/inertia-path-extractor.lua
 -- Utility functions for path processing
+
 local utils = {
-  -- Clean and normalize a path
   normalize_path = function(path)
     if not path then
       return nil
     end
-    -- Remove leading ./ or /
     path = path:gsub("^%.?/?", "")
-    -- Remove trailing slashes
     path = path:gsub("/?$", "")
-    -- Collapse multiple slashes
     path = path:gsub("//+", "/")
     return path
   end,
 
-  -- Validate if a path is legitimate
   validate_path = function(path)
     if not path then
       return false
     end
-    -- Check for invalid characters
     if path:match('[<>:"|?*]') then
       return false
     end
-    -- Check for reasonable length
     if #path > 255 then
       return false
     end
-    -- Ensure path doesn't try to traverse up
     if path:match("%.%.") then
       return false
     end
     return true
   end,
 
-  -- Debug logger
   log = function(msg, level)
     level = level or "info"
     if vim and vim.notify then
@@ -71,9 +63,7 @@ local function extract_pages_path(file_content, opts)
     return nil, throw_error(ErrorTypes.PARSE_ERROR, "Invalid file content")
   end
 
-  -- Enhanced patterns to match different resolver configurations
   local patterns = {
-    -- Laravel 11 style with resolvePageComponent
     {
       pattern = "resolvePageComponent%s*%(%s*[`'\"](.-)/%${name}%.vue[`'\"]",
       process = function(match)
@@ -81,7 +71,6 @@ local function extract_pages_path(file_content, opts)
       end,
       name = "Laravel 11 resolvePageComponent",
     },
-    -- Vite/import.meta.glob style with eager option
     {
       pattern = "pages%s*=%s*import%.meta%.glob%([`'\"](.-)/[*][*]/[*]%.vue[`'\"]%s*,%s*{%s*eager:%s*true%s*}",
       process = function(match)
@@ -89,7 +78,6 @@ local function extract_pages_path(file_content, opts)
       end,
       name = "Vite eager glob",
     },
-    -- Vite/import.meta.glob style without eager
     {
       pattern = "pages%s*=%s*import%.meta%.glob%([`'\"](.-)/[*][*]/[*]%.vue[`'\"]",
       process = function(match)
@@ -97,7 +85,6 @@ local function extract_pages_path(file_content, opts)
       end,
       name = "Vite standard glob",
     },
-    -- Direct string path style
     {
       pattern = "[`'\"]%./?(.-?)/%${name}%.vue[`'\"]",
       process = function(match)
@@ -105,7 +92,6 @@ local function extract_pages_path(file_content, opts)
       end,
       name = "Direct string path",
     },
-    -- Webpack require style
     {
       pattern = "require%([`'\"]%./(.-)/[^`'\"]+[`'\"]%)",
       process = function(match)
@@ -113,7 +99,6 @@ local function extract_pages_path(file_content, opts)
       end,
       name = "Webpack require",
     },
-    -- Dynamic import style
     {
       pattern = "import%(([`'\"]%.?/.-)/[^`'\"]+[`'\"]%)",
       process = function(match)
@@ -121,7 +106,6 @@ local function extract_pages_path(file_content, opts)
       end,
       name = "Dynamic import",
     },
-    -- definePages style (newer Inertia versions)
     {
       pattern = "definePages%(%s*[`'\"](.-)/%${name}%.vue[`'\"]",
       process = function(match)
@@ -131,7 +115,6 @@ local function extract_pages_path(file_content, opts)
     },
   }
 
-  -- Try each pattern until we find a match
   for _, pattern_config in ipairs(patterns) do
     local success, result = pcall(function()
       local match = file_content:match(pattern_config.pattern)
@@ -152,7 +135,6 @@ local function extract_pages_path(file_content, opts)
         return nil, throw_error(ErrorTypes.PARSE_ERROR, result)
       end
     elseif result then
-      -- Validate the processed path
       if not utils.validate_path(result) then
         return nil, throw_error(ErrorTypes.INVALID_PATH, "Invalid characters or unsafe path detected")
       end
@@ -217,7 +199,6 @@ local function test_extract_pages_path()
       ]],
       expected = "Pages",
     },
-    -- Error cases
     {
       name = "Invalid path (../)",
       content = [[

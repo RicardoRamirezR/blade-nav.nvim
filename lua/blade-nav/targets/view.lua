@@ -1,7 +1,8 @@
 -- lua/blade-nav/targets/view.lua
-local log = require("blade-nav.utils.log")
-local ts_utils = require("blade-nav.utils.treesitter")
+
 local fs = require("blade-nav.utils.fs")
+local log = require("blade-nav.utils.log")
+local treesitter = require("blade-nav.utils.treesitter")
 
 local M = {}
 
@@ -27,7 +28,6 @@ local function type_candidate(line)
 end
 
 --- Gets target information if the cursor is on a view reference (function calls).
---- Uses ts_utils.extract_keys_from_code to find the view name.
 --- Calculates potential file paths and filters based on existence.
 --- @param context BladeNavContext Context created by context.lua
 --- @return BladeNavTargetInfo|nil { type = "view", name = "normalized.view.name", choices = { "path/1", ... } } or nil
@@ -47,7 +47,7 @@ function M.get_target(context)
 
   log.debug("Line identified as candidate type: %s", target_type)
 
-  local found_keys = ts_utils.extract_keys_from_code(line, target_type)
+  local found_keys = treesitter.extract_keys_from_code(line, target_type)
 
   log.debug("Found keys: %s", vim.inspect(found_keys))
   if not found_keys or type(found_keys) ~= "table" or #found_keys == 0 then

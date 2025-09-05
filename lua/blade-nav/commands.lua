@@ -3,7 +3,6 @@ local laravel = require("blade-nav.utils.laravel")
 
 local M = {}
 
---- Install the BladeNav artisan command into app/Console/Commands
 function M.install_artisan_command()
   vim.api.nvim_create_user_command("BladeNavInstallArtisanCommand", function()
     local source = laravel.get_blade_nav_filename()
@@ -29,7 +28,6 @@ function M.install_artisan_command()
   end, { desc = "Copy BladeNav.php to app/Console/Commands/BladeNav.php" })
 end
 
---- Clear BladeNav cache
 function M.clear_cache()
   vim.api.nvim_create_user_command("BladeNavClearCache", function()
     require("blade-nav.utils.cache").clear()

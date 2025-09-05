@@ -1,8 +1,9 @@
 -- lua/blade-nav/targets/livewire.lua
+
+local fs = require("blade-nav.utils.fs")
 local log = require("blade-nav.utils.log")
-local ts_utils = require("blade-nav.utils.treesitter")
-local fs = require("blade-nav.utils.fs")               -- For file existence checks
-local string_utils = require("blade-nav.utils.string") -- Assuming kebab_to_pascal exists
+local string_utils = require("blade-nav.utils.string")
+local treesitter = require("blade-nav.utils.treesitter")
 
 local M = {}
 
@@ -18,7 +19,7 @@ function M.get_target(context)
   end
 
   local component_identifier = nil
-  local directive_name, arguments = ts_utils.extract_first_blade_argument(line, "@livewire")
+  local directive_name, arguments = treesitter.extract_first_blade_argument(line, "@livewire")
   log.debug(
     "Tried extract_first_blade_argument('@livewire'), got directive: '%s', args: %s",
     tostring(directive_name),
@@ -34,7 +35,7 @@ function M.get_target(context)
   end
 
   if not component_identifier or component_identifier == "" then
-    component_identifier = ts_utils.extract_component(line, "livewire")
+    component_identifier = treesitter.extract_component(line, "livewire")
     log.debug("Tried extract_component('livewire'), got: %s", tostring(component_identifier))
   end
 
@@ -101,7 +102,7 @@ function M.get_target(context)
   return result
 end
 
--- The resolve function is no longer needed/used by the core system
+-- The resolve function is no needed/used by the core system
 -- because targets/init.lua handles single choices and delegates multiples to show_choices.
 M.resolve = function(target_info)
   -- No-op or log if called unexpectedly
