@@ -1,32 +1,31 @@
 -- tests/minimal_init.lua
--- Minimal init for running Plenary tests
 
--- Add project lua/ to runtime path
-vim.opt.rtp:append(".")
+-- Get the current directory (project root)
+local project_root = vim.fn.getcwd()
 
--- Ensure plenary is available
-pcall(require, "plenary")
+-- Add project to runtimepath
+vim.opt.runtimepath:prepend(project_root)
 
--- (Optional) disable user config that might interfere
-vim.cmd("set noswapfile")
-vim.cmd("set rtp+=./lua")
+-- The plugins installed in site/pack/vendor/start will be loaded automatically
+-- No need to manually add them to runtimepath
 
--- tests/minimal_init.lua
-vim.cmd("set runtimepath=$VIMRUNTIME")
-vim.cmd("set packpath^=~/.local/share/nvim/site")
+-- Configure basic settings for headless mode
+vim.opt.swapfile = false
+vim.opt.backup = false
+vim.opt.writebackup = false
 
--- Add lazy.nvim-style plugin paths
-vim.opt.runtimepath:append("~/.local/share/nvim/lazy/plenary.nvim")
-vim.opt.runtimepath:append("~/.local/share/nvim/lazy/nvim-treesitter")
+-- Load plenary commands
+vim.cmd("runtime! plugin/plenary.vim")
 
--- Configure nvim-treesitter
-local ok, ts_configs = pcall(require, "nvim-treesitter.configs")
-if ok then
-  ts_configs.setup({
+-- Optional: configure nvim-treesitter if available but disable problematic features
+pcall(function()
+  require("nvim-treesitter.configs").setup({
     ensure_installed = { "blade", "php", "html", "vue" },
     sync_install = true,
     highlight = { enable = false },
+    indent = { enable = false },
+    -- Disable other potentially problematic features
+    autopairs = { enable = false },
+    autotag = { enable = false },
   })
-else
-  vim.api.nvim_err_writeln("nvim-treesitter not available in test runtimepath")
-end
+end)

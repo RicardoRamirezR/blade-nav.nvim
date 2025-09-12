@@ -129,14 +129,19 @@ function M.find_files(path, extension, exclude_dirs)
   else
     tool = "find"
     cmd_template = "find %s -type f -name '*.%s' %s"
-    exclude_fmt = "-not -path './%s/*'"
+    exclude_fmt = "-not -path '%s/*'"
   end
 
   local exclude_cmd = ""
   if exclude_dirs and #exclude_dirs > 0 then
     exclude_cmd = table.concat(
       vim.tbl_map(function(dir)
-        return string.format(exclude_fmt, dir)
+        if tool == "fd" then
+          return string.format(exclude_fmt, dir)
+        else
+          -- para find usamos path absoluto
+          return string.format(exclude_fmt, path .. "/" .. dir)
+        end
       end, exclude_dirs),
       " "
     )

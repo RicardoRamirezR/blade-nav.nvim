@@ -19,7 +19,7 @@ local cfg_map = config_extractor.get_map()
 local config = {}
 local render_debounced
 
--- Treesitter query for config/env/Config::get/Config::set
+-- Treesitter query for config/env/Config::get/Config::set in PHP
 local PHP_CALLS_Q = vim.treesitter.query.parse(
   "php",
   [[
@@ -55,6 +55,27 @@ local PHP_CALLS_Q = vim.treesitter.query.parse(
 ]]
 )
 
+-- Treesitter query for config/env calls in JavaScript (for Blade files)
+local JS_CALLS_Q = vim.treesitter.query.parse(
+  "javascript",
+  [[
+  ; JavaScript call expression: config('key') or env('key', 'default')
+  (call_expression
+    function: (identifier) @fn_name
+    arguments: (arguments
+      (string (string_fragment) @key_str)
+      (string (string_fragment) @default_str)?)
+    (#any-of? @fn_name "config" "env"))
+
+  ; Also catch calls in binary expressions (like in your example)
+  (call_expression
+    function: (identifier) @fn_name
+    arguments: (arguments
+      (string (string_fragment) @key_str))
+    (#any-of? @fn_name "config" "env"))
+]]
+)
+
 -- Utility: iterate php subtrees (Blade injects php)
 local function for_each_php_tree(bufnr, cb)
   local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
@@ -64,6 +85,20 @@ local function for_each_php_tree(bufnr, cb)
 
   parser:for_each_tree(function(tstree, langtree)
     if langtree:lang() == "php" then
+      cb(tstree:root(), bufnr)
+    end
+  end)
+end
+
+-- Utility: iterate javascript subtrees (for embedded JS in Blade)
+local function for_each_js_tree(bufnr, cb)
+  local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
+  if not ok or not parser then
+    return
+  end
+
+  parser:for_each_tree(function(tstree, langtree)
+    if langtree:lang() == "javascript" then
       cb(tstree:root(), bufnr)
     end
   end)
@@ -81,11 +116,24 @@ local function truncate(s, n)
   return s:sub(1, n - 1) .. "…"
 end
 
--- Find enclosing call node (function_call_expression or scoped_call_expression)
+-- Find enclosing call node (function_call_expression or scoped_call_expression for PHP)
 local function find_enclosing_call(node)
   while node do
     local t = node:type()
     if t == "function_call_expression" or t == "scoped_call_expression" then
+      return node
+    end
+    node = node:parent()
+  end
+
+  return nil
+end
+
+-- Find enclosing call node for JavaScript
+local function find_enclosing_js_call(node)
+  while node do
+    local t = node:type()
+    if t == "call_expression" then
       return node
     end
     node = node:parent()
@@ -147,6 +195,57 @@ local function format_value_for_display(key, default_value, kind)
   return ("config(%s) = %s"):format(key, config_entry.text)
 end
 
+-- Process JavaScript matches and render annotations
+local function process_js_matches(root, bufnr)
+  local processed_nodes = {}
+
+  for _, match, _ in JS_CALLS_Q:iter_matches(root, bufnr) do
+    local fn, key, callnode
+    local default_value = nil
+
+    for id, nodes in pairs(match) do
+      local cap = JS_CALLS_Q.captures[id]
+      local node = nodes[1]
+      local node_text = ts.get_node_text(node, bufnr)
+
+      if cap == "fn_name" then
+        fn = node_text
+      elseif cap == "key_str" then
+        key = node_text
+      elseif cap == "default_str" then
+        default_value = node_text
+      end
+
+      callnode = callnode or find_enclosing_js_call(node)
+    end
+
+    if not key or not callnode or not fn then
+      goto continue
+    end
+
+    local sr, sc, er, ec = callnode:range()
+    local node_range = string.format("%d:%d-%d:%d", sr, sc, er, ec)
+
+    if processed_nodes[node_range] then
+      goto continue
+    end
+
+    processed_nodes[node_range] = true
+
+    local kind = (fn == "env") and "env" or "config"
+    local value_txt = format_value(key, default_value, kind)
+    local vt = config.prefix .. truncate(value_txt, config.max_len)
+
+    vim.api.nvim_buf_set_extmark(bufnr, ns, er, ec, {
+      virt_text = { { vt, config.hl } },
+      virt_text_pos = "eol",
+      hl_mode = "combine",
+    })
+
+    ::continue::
+  end
+end
+
 -- Render virtual text for a buffer (safe to call repeatedly)
 local function render_buffer(bufnr)
   if not vim.api.nvim_buf_is_loaded(bufnr) then
@@ -159,6 +258,7 @@ local function render_buffer(bufnr)
     return
   end
 
+  -- Process PHP trees
   for_each_php_tree(bufnr, function(root, b)
     local processed_nodes = {}
 
@@ -215,16 +315,26 @@ local function render_buffer(bufnr)
       ::continue::
     end
   end)
+
+  -- Process JavaScript trees (for Blade files with embedded JS)
+  for_each_js_tree(bufnr, function(root, b)
+    process_js_matches(root, b)
+  end)
 end
 
--- value at cursor using treesitter matches
+-- Enhanced value_at_cursor to handle JavaScript contexts
 local function value_at_cursor(bufnr)
   unpack = table.unpack or unpack
   local row, col = unpack(vim.api.nvim_win_get_cursor(0))
   row = row - 1
   local found
 
+  -- First try PHP trees
   for_each_php_tree(bufnr, function(root, b)
+    if found then
+      return
+    end
+
     for _, match, _ in PHP_CALLS_Q:iter_matches(root, b) do
       local fn, method, key, callnode
       local default_value = nil
@@ -269,6 +379,52 @@ local function value_at_cursor(bufnr)
       end
     end
   end)
+
+  -- If not found in PHP, try JavaScript trees
+  if not found then
+    for_each_js_tree(bufnr, function(root, b)
+      if found then
+        return
+      end
+
+      for _, match, _ in JS_CALLS_Q:iter_matches(root, b) do
+        local fn, key, callnode
+        local default_value = nil
+
+        for id, nodes in pairs(match) do
+          local cap = JS_CALLS_Q.captures[id]
+          local node = nodes[1]
+          local node_text = ts.get_node_text(node, b)
+
+          if cap == "fn_name" then
+            fn = node_text
+          elseif cap == "key_str" then
+            key = node_text
+          elseif cap == "default_str" then
+            default_value = node_text
+          end
+
+          callnode = callnode or find_enclosing_js_call(node)
+        end
+
+        if callnode and key and fn then
+          local sr, sc, er, ec = callnode:range()
+          if row >= sr and row <= er and col >= sc and col <= ec then
+            local kind = (fn == "env") and "env" or "config"
+            found = {
+              fn = fn,
+              method = nil,
+              key = key,
+              callnode = callnode,
+              default_value = default_value,
+              kind = kind,
+            }
+            return
+          end
+        end
+      end
+    end)
+  end
 
   if not found then
     return nil
@@ -384,11 +540,17 @@ local function conditional_notify(msg, level, opts)
   return original_notify(msg, level, opts)
 end
 
--- Check if we have a config/env value at cursor position
+-- Check if we have a config/env value at cursor position (enhanced for JS)
 local function has_value_at_cursor(bufnr)
   local ft = vim.bo[bufnr].filetype
   if ft == "blade" then
-    return get_value_for_blade() ~= nil
+    -- Try the textnode approach first
+    local blade_value = get_value_for_blade()
+    if blade_value then
+      return true
+    end
+    -- Also try the treesitter approach
+    return value_at_cursor(bufnr) ~= nil
   end
 
   return value_at_cursor(bufnr) ~= nil
