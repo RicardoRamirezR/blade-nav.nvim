@@ -139,42 +139,85 @@ function M.extract_element(bufnr)
   return nil
 end
 
-function M.extract_directive(node, bufnr)
-  local t = node:type()
-  if t ~= "directive" and t ~= "parameter" and t ~= "bracket_start" and t ~= "bracket_end" then
-    return nil
+function M.find_directive_context(node)
+  -- First, try to find a directive node directly
+  local directive_node = M.find_parent(node, function(n)
+    return n:type() == "directive"
+  end)
+
+  if directive_node then
+    return directive_node
   end
 
-  local directive_node = node
-  if t ~= "directive" then
-    directive_node = M.find_parent(node, function(n)
-      return n:type() == "directive" or n:type() == "blade"
-    end)
-  end
-
-  if directive_node and directive_node:type() == "directive" then
-    local parts = {}
-    local text = M.node_text(directive_node, bufnr)
-    if text then
-      table.insert(parts, text)
-    end
-
-    local next = directive_node:next_sibling()
-    while next do
-      local nt = M.clean_text(M.node_text(next, bufnr))
-      if nt and nt ~= "" then
-        table.insert(parts, nt)
+  -- If cursor is in parameters, look for directive among siblings
+  -- Traverse up to find a node that has directive siblings
+  local current = node
+  while current do
+    local parent = current:parent()
+    if parent then
+      -- Check if any sibling is a directive
+      for child in parent:iter_children() do
+        if child:type() == "directive" then
+          return child
+        end
       end
-      if next:type() == "bracket_end" then
-        break
-      end
-      next = next:next_sibling()
     end
-
-    return table.concat(parts, "")
+    current = parent
   end
 
   return nil
+end
+
+function M.extract_directive(node, bufnr)
+  if not node then
+    return nil
+  end
+
+  -- Find the directive node (could be current node or a sibling)
+  local directive_node = M.find_directive_context(node)
+
+  if not directive_node or directive_node:type() ~= "directive" then
+    return nil
+  end
+
+  -- Get the row range for the directive
+  local start_row, start_col, _, _ = directive_node:range()
+
+  -- Find the end of the directive by looking at siblings
+  local end_row, end_col = directive_node:range() -- fallback to directive itself
+
+  -- Look for the last parameter or directive_end sibling
+  local parent = directive_node:parent()
+  if parent then
+    local last_relevant_node = directive_node
+    local found_parameters = false
+
+    for child in parent:iter_children() do
+      local child_start_row = child:range()
+
+      -- Only consider nodes that come after the directive
+      if child_start_row >= start_row then
+        if child:type() == "parameter" then
+          last_relevant_node = child
+          found_parameters = true
+        elseif child:type() == "directive_end" then
+          last_relevant_node = child
+          break
+        elseif found_parameters and child:type() ~= "directive" then
+          -- Stop if we've found parameters and hit a different type of node
+          break
+        end
+      end
+    end
+
+    _, _, end_row, end_col = last_relevant_node:range()
+  end
+
+  -- Extract the complete text from start to end
+  local lines = vim.api.nvim_buf_get_text(bufnr, start_row, start_col, end_row, end_col, {})
+  local raw_text = table.concat(lines, "\n")
+
+  return M.clean_text(raw_text)
 end
 
 function M.get_text_node()
