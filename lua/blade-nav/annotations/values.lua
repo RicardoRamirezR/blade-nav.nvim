@@ -6,7 +6,6 @@ local ns = vim.api.nvim_create_namespace("blade-nav/values")
 local ts = vim.treesitter
 local uv = vim.loop
 
-local cache = require("blade-nav.utils.cache")
 local config_extractor = require("blade-nav.extractors.config")
 local debounce = require("blade-nav.utils.debounce")
 local env_extractor = require("blade-nav.extractors.env")
@@ -18,6 +17,13 @@ local cfg_map = config_extractor.get_map()
 
 local config = {}
 local render_debounced
+
+-- Background processing state
+local processing_queue = {}
+local processing_timer = nil
+local is_processing = false
+local max_processing_time_ms = 5 -- Max time per frame to avoid blocking
+local processing_batch_size = 10 -- Max nodes to process per batch
 
 -- Treesitter query for config/env/Config::get/Config::set in PHP
 local PHP_CALLS_Q = vim.treesitter.query.parse(
@@ -195,8 +201,69 @@ local function format_value_for_display(key, default_value, kind)
   return ("config(%s) = %s"):format(key, config_entry.text)
 end
 
--- Process JavaScript matches and render annotations
-local function process_js_matches(root, bufnr)
+-- Background processing: collect matches without rendering
+local function collect_php_matches(root, bufnr)
+  local matches = {}
+  local processed_nodes = {}
+
+  for _, match, _ in PHP_CALLS_Q:iter_matches(root, bufnr) do
+    local fn, method, key, callnode
+    local default_value = nil
+
+    for id, nodes in pairs(match) do
+      local cap = PHP_CALLS_Q.captures[id]
+      local node = nodes[1]
+      local node_text = ts.get_node_text(node, bufnr)
+
+      if cap == "fn_name" then
+        fn = node_text
+      elseif cap == "method" then
+        method = node_text
+      elseif cap == "key_str" then
+        key = node_text
+      elseif cap == "default_str" then
+        default_value = node_text
+      end
+
+      callnode = callnode or find_enclosing_call(node)
+    end
+
+    if not key or not callnode then
+      goto continue
+    end
+
+    local sr, sc, er, ec = callnode:range()
+    local node_range = string.format("%d:%d-%d:%d", sr, sc, er, ec)
+
+    if processed_nodes[node_range] then
+      goto continue
+    end
+
+    processed_nodes[node_range] = true
+
+    local kind = (fn == "env") and "env" or "config"
+    if method and (method == "get" or method == "set") then
+      kind = "config"
+    end
+
+    table.insert(matches, {
+      bufnr = bufnr,
+      row = er,
+      col = ec,
+      key = key,
+      default_value = default_value,
+      kind = kind,
+    })
+
+    ::continue::
+  end
+
+  return matches
+end
+
+-- Background processing: collect JavaScript matches
+local function collect_js_matches(root, bufnr)
+  local matches = {}
   local processed_nodes = {}
 
   for _, match, _ in JS_CALLS_Q:iter_matches(root, bufnr) do
@@ -233,10 +300,38 @@ local function process_js_matches(root, bufnr)
     processed_nodes[node_range] = true
 
     local kind = (fn == "env") and "env" or "config"
-    local value_txt = format_value(key, default_value, kind)
+
+    table.insert(matches, {
+      bufnr = bufnr,
+      row = er,
+      col = ec,
+      key = key,
+      default_value = default_value,
+      kind = kind,
+    })
+
+    ::continue::
+  end
+
+  return matches
+end
+
+-- Background processing: render a batch of matches
+local function render_matches_batch(matches, start_idx, batch_size)
+  local end_idx = math.min(start_idx + batch_size - 1, #matches)
+
+  for i = start_idx, end_idx do
+    local match = matches[i]
+
+    -- Skip if buffer is no longer valid
+    if not vim.api.nvim_buf_is_valid(match.bufnr) or not vim.api.nvim_buf_is_loaded(match.bufnr) then
+      goto continue
+    end
+
+    local value_txt = format_value(match.key, match.default_value, match.kind)
     local vt = config.prefix .. truncate(value_txt, config.max_len)
 
-    vim.api.nvim_buf_set_extmark(bufnr, ns, er, ec, {
+    pcall(vim.api.nvim_buf_set_extmark, match.bufnr, ns, match.row, match.col, {
       virt_text = { { vt, config.hl } },
       virt_text_pos = "eol",
       hl_mode = "combine",
@@ -244,10 +339,121 @@ local function process_js_matches(root, bufnr)
 
     ::continue::
   end
+
+  return end_idx
 end
 
--- Render virtual text for a buffer (safe to call repeatedly)
-local function render_buffer(bufnr)
+-- Background processing timer function
+local function process_queue_batch()
+  if not processing_timer or is_processing then
+    return
+  end
+
+  -- Use vim.schedule to move to main event loop context
+  vim.schedule(function()
+    is_processing = true
+    local start_time = uv.hrtime()
+
+    while #processing_queue > 0 do
+      local item = processing_queue[1]
+
+      -- Check if we've exceeded our time budget
+      local elapsed = (uv.hrtime() - start_time) / 1000000 -- Convert to ms
+      if elapsed > max_processing_time_ms then
+        break
+      end
+
+      -- Skip if buffer is no longer valid
+      if not vim.api.nvim_buf_is_valid(item.bufnr) then
+        table.remove(processing_queue, 1)
+        goto continue
+      end
+
+      if item.type == "collect" then
+        -- Collect matches for this buffer
+        local all_matches = {}
+
+        -- Collect PHP matches
+        for_each_php_tree(item.bufnr, function(root, bufnr)
+          local matches = collect_php_matches(root, bufnr)
+          for _, match in ipairs(matches) do
+            table.insert(all_matches, match)
+          end
+        end)
+
+        -- Collect JavaScript matches
+        for_each_js_tree(item.bufnr, function(root, bufnr)
+          local matches = collect_js_matches(root, bufnr)
+          for _, match in ipairs(matches) do
+            table.insert(all_matches, match)
+          end
+        end)
+
+        -- Add render job to queue
+        if #all_matches > 0 then
+          table.insert(processing_queue, {
+            type = "render",
+            bufnr = item.bufnr,
+            matches = all_matches,
+            batch_start = 1,
+          })
+        end
+
+        table.remove(processing_queue, 1)
+      elseif item.type == "render" then
+        -- Render a batch of matches
+        local last_idx = render_matches_batch(item.matches, item.batch_start, processing_batch_size)
+
+        if last_idx < #item.matches then
+          -- More to render, update batch start
+          item.batch_start = last_idx + 1
+        else
+          -- Finished rendering this buffer
+          table.remove(processing_queue, 1)
+        end
+      end
+
+      ::continue::
+    end
+
+    is_processing = false
+
+    -- Schedule next processing if queue not empty
+    if #processing_queue > 0 then
+      processing_timer:start(1, 0, process_queue_batch) -- Process again in 1ms
+    else
+      processing_timer:stop()
+    end
+  end)
+end
+
+-- Queue a buffer for background processing
+local function queue_buffer_processing(bufnr)
+  -- Remove any existing items for this buffer
+  for i = #processing_queue, 1, -1 do
+    if processing_queue[i].bufnr == bufnr then
+      table.remove(processing_queue, i)
+    end
+  end
+
+  -- Add new processing job
+  table.insert(processing_queue, {
+    type = "collect",
+    bufnr = bufnr,
+  })
+
+  -- Start processing if not already running
+  if not processing_timer then
+    processing_timer = uv.new_timer()
+  end
+
+  if not is_processing and processing_timer then
+    processing_timer:start(1, 0, process_queue_batch) -- Start in 1ms
+  end
+end
+
+-- Enhanced render_buffer function with background processing option
+local function render_buffer(bufnr, use_background)
   if not vim.api.nvim_buf_is_loaded(bufnr) then
     return
   end
@@ -258,68 +464,21 @@ local function render_buffer(bufnr)
     return
   end
 
-  -- Process PHP trees
-  for_each_php_tree(bufnr, function(root, b)
-    local processed_nodes = {}
+  if use_background == false then
+    -- Synchronous rendering for immediate needs (like on_K)
+    for_each_php_tree(bufnr, function(root, b)
+      local matches = collect_php_matches(root, b)
+      render_matches_batch(matches, 1, #matches)
+    end)
 
-    for _, match, _ in PHP_CALLS_Q:iter_matches(root, b) do
-      local fn, method, key, callnode
-      local default_value = nil
-
-      for id, nodes in pairs(match) do
-        local cap = PHP_CALLS_Q.captures[id]
-        local node = nodes[1]
-        local node_text = ts.get_node_text(node, b)
-
-        if cap == "fn_name" then
-          fn = node_text
-        elseif cap == "method" then
-          method = node_text
-        elseif cap == "key_str" then
-          key = node_text
-        elseif cap == "default_str" then
-          default_value = node_text
-        end
-
-        callnode = callnode or find_enclosing_call(node)
-      end
-
-      if not key or not callnode then
-        goto continue
-      end
-
-      local sr, sc, er, ec = callnode:range()
-      local node_range = string.format("%d:%d-%d:%d", sr, sc, er, ec)
-
-      if processed_nodes[node_range] then
-        goto continue
-      end
-
-      processed_nodes[node_range] = true
-
-      local kind = (fn == "env") and "env" or "config"
-      if method and (method == "get" or method == "set") then
-        kind = "config"
-      end
-
-      local value_txt = format_value(key, default_value, kind)
-      local vt = config.prefix .. truncate(value_txt, config.max_len)
-
-      local _, _, er, ec = callnode:range()
-      vim.api.nvim_buf_set_extmark(b, ns, er, ec, {
-        virt_text = { { vt, config.hl } },
-        virt_text_pos = "eol",
-        hl_mode = "combine",
-      })
-
-      ::continue::
-    end
-  end)
-
-  -- Process JavaScript trees (for Blade files with embedded JS)
-  for_each_js_tree(bufnr, function(root, b)
-    process_js_matches(root, b)
-  end)
+    for_each_js_tree(bufnr, function(root, b)
+      local matches = collect_js_matches(root, b)
+      render_matches_batch(matches, 1, #matches)
+    end)
+  else
+    -- Background processing (default)
+    queue_buffer_processing(bufnr)
+  end
 end
 
 -- Enhanced value_at_cursor to handle JavaScript contexts
@@ -499,9 +658,15 @@ end
 function M.toggle_show()
   config.show = not config.show
   if config.show then
-    render_buffer(vim.api.nvim_get_current_buf())
+    render_buffer(vim.api.nvim_get_current_buf(), true) -- Use background processing
     log.debug("Values enabled")
     return
+  end
+
+  -- Clear processing queue
+  processing_queue = {}
+  if processing_timer then
+    processing_timer:stop()
   end
 
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
@@ -515,7 +680,7 @@ end
 
 function M.refresh(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
-  render_buffer(bufnr)
+  render_buffer(bufnr, true) -- Use background processing
 end
 
 function M.clear_cache()
@@ -559,6 +724,12 @@ end
 -- on_K: try LSP hover (if supported), fallback to our value if hover empty / "No information available"
 function M.on_K()
   local bufnr = vim.api.nvim_get_current_buf()
+
+  -- Ensure current buffer has up-to-date annotations for immediate cursor lookup
+  if config.show then
+    render_buffer(bufnr, false) -- Force synchronous rendering for immediate response
+  end
+
   local clients = vim.lsp.get_clients({ bufnr = bufnr })
 
   local supports_hover = false
@@ -664,11 +835,12 @@ function M.setup()
   config = core_cfg.annotations
 
   render_debounced = debounce(function(buf)
-    render_buffer(buf)
+    render_buffer(buf, true) -- Use background processing for debounced renders
   end, config.debounce_ms or 120)
 
   local WEB_FILETYPES = { "php", "blade", "html", "javascript", "vue" }
   local grp = vim.api.nvim_create_augroup("BladeNavValues", { clear = true })
+
   vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
     group = grp,
     callback = function(args)
@@ -678,6 +850,7 @@ function M.setup()
       end
     end,
   })
+
   vim.api.nvim_create_autocmd({ "TextChanged", "InsertLeave", "BufWritePost" }, {
     group = grp,
     callback = function(args)
@@ -688,11 +861,24 @@ function M.setup()
     end,
   })
 
+  -- Cleanup on exit
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = grp,
+    callback = function()
+      if processing_timer then
+        processing_timer:stop()
+        processing_timer:close()
+        processing_timer = nil
+      end
+    end,
+  })
+
   vim.api.nvim_create_user_command("BladeNavToggleShowValues", function()
     M.toggle_show()
   end, {
     desc = "Toggle BladeNav config/env annotations in current project",
   })
+
   vim.api.nvim_create_user_command("BladeNavClearCache", function()
     M.clear_cache()
   end, {
