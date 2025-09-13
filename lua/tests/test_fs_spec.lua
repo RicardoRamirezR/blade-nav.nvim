@@ -67,8 +67,11 @@ describe("fs.find_files", function()
   end)
 
   it("finds files with fd branch", function()
-    fs.command_exists = function(cmd)
-      return cmd == "fd"
+    -- Only run this test when fd is actually available
+    local has_fd = fs.command_exists("fd")
+    if not has_fd then
+      pending("fd not available")
+      return
     end
 
     local files = fs.find_files(tmpdir, "blade.php")
@@ -78,19 +81,35 @@ describe("fs.find_files", function()
   end)
 
   it("finds files with find branch", function()
-    fs.command_exists = function(_)
-      return false
+    -- Mock to force using find even if fd is available
+    local real_command_exists = fs.command_exists
+    fs.command_exists = function(cmd)
+      if cmd == "fd" then
+        return false
+      end
+      return real_command_exists(cmd)
     end
 
     local files = fs.find_files(tmpdir, "blade.php")
     assert.is_truthy(files)
     assert.is_true(vim.tbl_contains(files, tmpdir .. "/views/home.blade.php"))
     assert.is_true(vim.tbl_contains(files, tmpdir .. "/views/about.blade.php"))
+
+    -- Restore original function
+    fs.command_exists = real_command_exists
   end)
 
   it("respects exclude_dirs", function()
+    local has_fd = fs.command_exists("fd")
+
+    -- Mock to ensure consistent behavior regardless of fd availability
+    local real_command_exists = fs.command_exists
     fs.command_exists = function(cmd)
-      return cmd == "fd"
+      if has_fd then
+        return cmd == "fd"
+      else
+        return false
+      end
     end
 
     local files = fs.find_files(tmpdir, "blade.php", { "exclude" })
@@ -98,5 +117,8 @@ describe("fs.find_files", function()
     for _, f in ipairs(files) do
       assert.is_falsy(f:match("secret.blade.php"))
     end
+
+    -- Restore original function
+    fs.command_exists = real_command_exists
   end)
 end)

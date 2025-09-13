@@ -134,17 +134,16 @@ function M.find_files(path, extension, exclude_dirs)
 
   local exclude_cmd = ""
   if exclude_dirs and #exclude_dirs > 0 then
-    exclude_cmd = table.concat(
-      vim.tbl_map(function(dir)
-        if tool == "fd" then
-          return string.format(exclude_fmt, dir)
-        else
-          -- para find usamos path absoluto
-          return string.format(exclude_fmt, path .. "/" .. dir)
-        end
-      end, exclude_dirs),
-      " "
-    )
+    local exclude_parts = {}
+    for _, dir in ipairs(exclude_dirs) do
+      if tool == "fd" then
+        table.insert(exclude_parts, string.format(exclude_fmt, dir))
+      else
+        -- For find, we need to use the full path pattern
+        table.insert(exclude_parts, string.format(exclude_fmt, path .. "/" .. dir))
+      end
+    end
+    exclude_cmd = table.concat(exclude_parts, " ")
   end
 
   local command
@@ -153,6 +152,9 @@ function M.find_files(path, extension, exclude_dirs)
   else
     command = string.format(cmd_template, path, extension, exclude_cmd)
   end
+
+  -- Clean up extra spaces
+  command = command:gsub("%s+", " "):gsub("%s$", "")
 
   local root = M.get_root_dir()
   local output, ok = cmd.execute_silent({ "sh", "-c", command }, { cwd = root })
