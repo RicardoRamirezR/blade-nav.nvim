@@ -80,7 +80,8 @@ function M._resolve_env(key_name)
   end
 
   vim.cmd("edit " .. vim.fn.fnameescape(env_file_path))
-  vim.bo.filetype = "bash"
+  vim.cmd("filetype detect")
+  -- vim.bo.filetype = "bash"
 
   local ts_status, ts = pcall(require, "vim.treesitter")
   if not ts_status or not ts then
@@ -166,7 +167,8 @@ function M._resolve_config(full_config_key)
   end
 
   vim.cmd("edit " .. vim.fn.fnameescape(config_file_path))
-  vim.bo.filetype = "php"
+  vim.cmd("filetype detect")
+  -- vim.bo.filetype = "php"
 
   local new_buf = vim.api.nvim_get_current_buf()
   log.info("Opened config file: %s", config_file_path)

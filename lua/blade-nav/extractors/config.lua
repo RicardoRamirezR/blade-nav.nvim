@@ -1,5 +1,3 @@
---- lua/blade-nav/extractors/config.lua
-
 local uv = vim.loop
 local ts = vim.treesitter
 local fs = require("blade-nav.utils.fs")
@@ -13,24 +11,24 @@ local watcher = nil
 
 --- Evaluate a PHP value node into a simplified representation.
 --- Supports: string, number, boolean, null, array, env('KEY', default).
---- @param bufnr integer
+--- @param content string
 --- @param node TSNode
 --- @return { kind:string, text:string, array_size?:integer, ref?:string }
-local function eval_value(bufnr, node)
+local function eval_value(content, node)
   local t = node:type()
 
   if t == "string" or t == "encapsed_string" then
-    local raw = ts.get_node_text(node, bufnr)
+    local raw = ts.get_node_text(node, content)
     local txt = raw:gsub("^%s*[\"']", ""):gsub("[\"']%s*$", "")
     return { kind = "scalar", text = txt }
   end
 
   if t == "integer" or t == "float" or t == "decimal" or t == "octal" or t == "hexadecimal" then
-    return { kind = "scalar", text = ts.get_node_text(node, bufnr) }
+    return { kind = "scalar", text = ts.get_node_text(node, content) }
   end
 
   if t == "boolean" then
-    local v = ts.get_node_text(node, bufnr)
+    local v = ts.get_node_text(node, content)
     return { kind = "scalar", text = (v == "true" and "true" or "false") }
   end
 
@@ -51,7 +49,7 @@ local function eval_value(bufnr, node)
   if t == "function_call_expression" then
     local name_node = node:child(0)
     if name_node and name_node:type() == "name" then
-      local fname = ts.get_node_text(name_node, bufnr)
+      local fname = ts.get_node_text(name_node, content)
       if fname == "env" then
         local args = node:child(1)
         if args and args:type() == "arguments" then
@@ -66,14 +64,14 @@ local function eval_value(bufnr, node)
           local def_inner = arg_nodes[2] and arg_nodes[2]:named_child(0)
 
           if key_inner then
-            local key = ts.get_node_text(key_inner, bufnr)
+            local key = ts.get_node_text(key_inner, content)
             key = key:gsub("^[\"']", ""):gsub("[\"']$", "")
 
             local val = env_map[key]
             if val and val ~= "" then
               return { kind = "env_ref", ref = key, text = val }
             elseif def_inner then
-              local def_eval = eval_value(bufnr, def_inner)
+              local def_eval = eval_value(content, def_inner)
               return { kind = "scalar", text = def_eval.text }
             else
               return { kind = "env_ref", ref = key, text = "(not found)" }
@@ -93,9 +91,15 @@ end
 --- @return table<string,{kind:string,text:string,array_size?:number,ref?:string}>, string
 local function extract_config_file_map(filepath)
   local basename = filepath:match("([^/]+)%.php$")
-  local bufnr = vim.fn.bufadd(filepath)
-  vim.fn.bufload(bufnr)
-  local parser = vim.treesitter.get_parser(bufnr, "php")
+
+  -- Read file content using fs.read_file
+  local content = fs.read_file(filepath)
+  if not content then
+    return {}, basename
+  end
+
+  -- Create a parser from the string content
+  local parser = ts.get_string_parser(content, "php")
   if not parser then
     return {}, basename
   end
@@ -104,7 +108,7 @@ local function extract_config_file_map(filepath)
   local root = tree:root()
   local map = {}
 
-  local function walk_array(buf, arr_node, current_prefix)
+  local function walk_array(file_content, arr_node, current_prefix)
     for child in arr_node:iter_children() do
       if child:type() == "array_element_initializer" then
         local k_node, v_node
@@ -117,7 +121,7 @@ local function extract_config_file_map(filepath)
         end
 
         if k_node and v_node then
-          local key = ts.get_node_text(k_node, bufnr):gsub("^[\"']", ""):gsub("[\"']$", "")
+          local key = ts.get_node_text(k_node, file_content):gsub("^[\"']", ""):gsub("[\"']$", "")
           local full_key = current_prefix and (current_prefix .. "." .. key) or key
 
           if v_node:type() == "array_creation_expression" then
@@ -134,9 +138,9 @@ local function extract_config_file_map(filepath)
               array_size = sub_element_count,
             }
 
-            walk_array(buf, v_node, full_key)
+            walk_array(file_content, v_node, full_key)
           else
-            local evaluated = eval_value(buf, v_node)
+            local evaluated = eval_value(file_content, v_node)
             map[full_key] = evaluated
           end
         end
@@ -148,7 +152,7 @@ local function extract_config_file_map(filepath)
     if child:type() == "return_statement" then
       for grand in child:iter_children() do
         if grand:type() == "array_creation_expression" then
-          walk_array(bufnr, grand, nil)
+          walk_array(content, grand, nil)
         end
       end
     end
