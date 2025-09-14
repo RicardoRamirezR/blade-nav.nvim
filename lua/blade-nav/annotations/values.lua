@@ -12,8 +12,30 @@ local env_extractor = require("blade-nav.extractors.env")
 local log = require("blade-nav.utils.log")
 local textnode = require("blade-nav.core.textnode")
 
-local env_map = env_extractor.get_map()
-local cfg_map = config_extractor.get_map()
+local env_map_local = nil
+local cfg_map = nil
+
+-- Function to get env_map (lazy initialization)
+local function get_env_map()
+  if not env_map_local then
+    env_map_local = env_extractor.get_map()
+  end
+  return env_map_local
+end
+
+-- Function to get cfg_map (lazy initialization)
+local function get_cfg_map()
+  if not cfg_map then
+    cfg_map = config_extractor.get_map()
+  end
+  return cfg_map
+end
+
+-- Function to invalidate cached maps (useful for refresh operations)
+local function invalidate_maps()
+  env_map_local = nil
+  cfg_map = nil
+end
 
 local config = {}
 local render_debounced
@@ -151,53 +173,51 @@ end
 -- Aux common function to format values
 local function format_value(key, default_value, kind)
   if kind == "env" then
-    local env_value = env_map[key]
+    local env_map_local = get_env_map()
+    local env_value = env_map_local[key]
     if not env_value or env_value == "" then
       return default_value or "(not found)"
     end
     return env_value
   end
-
-  local config_entry = cfg_map[key]
+  local cfg_map_local = get_cfg_map()
+  local config_entry = cfg_map_local[key]
   if not config_entry then
     return "(not found)"
   end
-
   if config_entry.kind == "array" then
     return string.format("[array: %d]", config_entry.array_size or 0)
   end
-
   if config_entry.kind == "env_ref" then
-    local referenced_env_value = env_map[config_entry.ref] or "(not found)"
+    local env_map_local = get_env_map()
+    local referenced_env_value = env_map_local[config_entry.ref] or "(not found)"
     return string.format("%s", referenced_env_value)
   end
-
   return config_entry.text
 end
 
 local function format_value_for_display(key, default_value, kind)
   if kind == "env" then
-    local env_value = env_map[key]
+    local env_map_local = get_env_map()
+    local env_value = env_map_local[key]
     if not env_value or env_value == "" then
       return ("env(%s) = %s"):format(key, default_value or "(not found)")
     end
     return ("env(%s) = %s"):format(key, env_value)
   end
-
-  local config_entry = cfg_map[key]
+  local cfg_map_local = get_cfg_map()
+  local config_entry = cfg_map_local[key]
   if not config_entry then
     return ("config(%s) = (not found)"):format(key)
   end
-
   if config_entry.kind == "array" then
     return ("config(%s) = [array: %d]"):format(key, config_entry.array_size or 0)
   end
-
   if config_entry.kind == "env_ref" then
-    local referenced_env_value = env_map[config_entry.ref] or "(not found)"
+    local env_map_local = get_env_map()
+    local referenced_env_value = env_map_local[config_entry.ref] or "(not found)"
     return ("config(%s) = %s"):format(key, referenced_env_value)
   end
-
   return ("config(%s) = %s"):format(key, config_entry.text)
 end
 
