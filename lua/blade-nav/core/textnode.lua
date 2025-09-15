@@ -1,6 +1,6 @@
 -- lua/blade-nav/core/textnode.lua
-local M = {}
 
+local M = {}
 local ts = vim.treesitter
 
 function M.node_text(node, bufnr)
@@ -47,8 +47,6 @@ function M.safe_get_node_at_cursor(bufnr)
 
   local ok, parser = pcall(ts.get_parser, bufnr, ft)
   if not ok or not parser then
-    print("NO PARSER FOR", ft)
-
     vim.notify("No parser available for buffer", vim.log.levels.WARN)
     return nil
   end
@@ -139,85 +137,146 @@ function M.extract_element(bufnr)
   return nil
 end
 
-function M.find_directive_context(node)
-  -- First, try to find a directive node directly
-  local directive_node = M.find_parent(node, function(n)
-    return n:type() == "directive"
-  end)
-
-  if directive_node then
-    return directive_node
-  end
-
-  -- If cursor is in parameters, look for directive among siblings
-  -- Traverse up to find a node that has directive siblings
-  local current = node
-  while current do
-    local parent = current:parent()
-    if parent then
-      -- Check if any sibling is a directive
-      for child in parent:iter_children() do
-        if child:type() == "directive" then
-          return child
-        end
-      end
-    end
-    current = parent
-  end
-
-  return nil
-end
-
 function M.extract_directive(node, bufnr)
-  if not node then
-    return nil
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local row = cursor[1] - 1
+  local col = cursor[2]
+
+  -- Get parser for current buffer
+  local parser = vim.treesitter.get_parser(bufnr, "blade")
+  if not parser then
+    return nil, "No Blade parser available"
   end
 
-  -- Find the directive node (could be current node or a sibling)
-  local directive_node = M.find_directive_context(node)
+  -- Parse and get the root node
+  local tree = parser:parse()
+  local root = tree[1]:root()
 
-  if not directive_node or directive_node:type() ~= "directive" then
-    return nil
+  -- Find the node at cursor position
+  local cursor_node = root:descendant_for_range(row, col, row, col)
+  if not cursor_node then
+    return nil, "No node found at cursor position"
   end
 
-  -- Get the row range for the directive
-  local start_row, start_col, _, _ = directive_node:range()
+  -- Find the nearest directive or parameter node, handling parentheses
+  local current_node = cursor_node
+  local directive_node = nil
+  local parameter_node = nil
 
-  -- Find the end of the directive by looking at siblings
-  local end_row, end_col = directive_node:range() -- fallback to directive itself
+  while current_node do
+    local node_type = current_node:type()
 
-  -- Look for the last parameter or directive_end sibling
-  local parent = directive_node:parent()
-  if parent then
-    local last_relevant_node = directive_node
-    local found_parameters = false
-
-    for child in parent:iter_children() do
-      local child_start_row = child:range()
-
-      -- Only consider nodes that come after the directive
-      if child_start_row >= start_row then
-        if child:type() == "parameter" then
-          last_relevant_node = child
-          found_parameters = true
-        elseif child:type() == "directive_end" then
-          last_relevant_node = child
+    if node_type == "directive" then
+      directive_node = current_node
+      break
+    elseif node_type == "parameter" then
+      parameter_node = current_node
+      -- Continue searching for directive node
+      local prev_sibling = current_node:prev_named_sibling()
+      if prev_sibling and prev_sibling:type() == "directive" then
+        directive_node = prev_sibling
+        break
+      end
+    elseif node_type == "(" then
+      -- Handle opening parenthesis
+      local next_sibling = current_node:next_named_sibling()
+      if next_sibling and next_sibling:type() == "parameter" then
+        parameter_node = next_sibling
+        -- Find the directive node
+        local prev_sibling = parameter_node:prev_named_sibling()
+        if prev_sibling and prev_sibling:type() == "directive" then
+          directive_node = prev_sibling
           break
-        elseif found_parameters and child:type() ~= "directive" then
-          -- Stop if we've found parameters and hit a different type of node
+        end
+      end
+    elseif node_type == ")" then
+      -- Handle closing parenthesis - this is trickier
+      -- Look for the parameter node that should contain this parenthesis
+      local parent = current_node:parent()
+
+      -- If the parenthesis is directly under a parameter node
+      if parent and parent:type() == "parameter" then
+        parameter_node = parent
+        local prev_sibling = parent:prev_named_sibling()
+        if prev_sibling and prev_sibling:type() == "directive" then
+          directive_node = prev_sibling
+          break
+        end
+      else
+        -- If not, look for siblings that might be parameter nodes
+        local prev_sibling = current_node:prev_named_sibling()
+        while prev_sibling do
+          if prev_sibling:type() == "parameter" then
+            parameter_node = prev_sibling
+            local directive_sibling = prev_sibling:prev_named_sibling()
+            if directive_sibling and directive_sibling:type() == "directive" then
+              directive_node = directive_sibling
+              break
+            end
+            break
+          end
+          prev_sibling = prev_sibling:prev_named_sibling()
+        end
+
+        if directive_node then
           break
         end
       end
     end
 
-    _, _, end_row, end_col = last_relevant_node:range()
+    current_node = current_node:parent()
   end
 
-  -- Extract the complete text from start to end
-  local lines = vim.api.nvim_buf_get_text(bufnr, start_row, start_col, end_row, end_col, {})
-  local raw_text = table.concat(lines, "\n")
+  -- If we found a parameter but no directive, search siblings
+  if parameter_node and not directive_node then
+    directive_node = parameter_node:prev_named_sibling()
+  end
 
-  return M.clean_text(raw_text)
+  -- If we still don't have a directive node, check if we're in a directive context
+  if not directive_node then
+    -- Check if we're between a directive and its parameter
+    local parent = cursor_node:parent()
+    if parent and parent:type() == "directive" then
+      directive_node = parent
+    else
+      return nil
+    end
+  end
+
+  -- Extract directive name
+  local directive_text = M.node_text(directive_node, bufnr)
+  if not directive_text then
+    return nil
+  end
+
+  -- Clean directive text (remove @ and parentheses if present)
+  directive_text = directive_text:match("^([%w_]+)%)?") or directive_text:match("^([%w_]+)") or directive_text
+
+  -- Find parameter node if it exists
+  if not parameter_node then
+    parameter_node = directive_node:next_named_sibling()
+    if parameter_node and parameter_node:type() ~= "parameter" then
+      parameter_node = nil
+    end
+  end
+
+  local parameter_text = nil
+
+  if parameter_node and parameter_node:type() == "parameter" then
+    parameter_text = M.node_text(parameter_node, bufnr)
+  end
+
+  -- Format the return string
+  if parameter_text then
+    parameter_text = M.clean_text(parameter_text)
+    -- Wrap parameter in parentheses if not already
+    if not parameter_text:match("^%s*%b()$") then
+      parameter_text = "(" .. parameter_text .. ")"
+    end
+    return directive_text .. parameter_text
+  else
+    return directive_text
+  end
 end
 
 function M.get_text_node()
@@ -227,7 +286,9 @@ function M.get_text_node()
     return nil
   end
 
-  return M.extract_php(node, bufnr) or M.extract_directive(node, bufnr) or M.extract_element(bufnr) or nil
+  local text = M.extract_php(node, bufnr) or M.extract_directive(node, bufnr) or M.extract_element(bufnr) or nil
+
+  return text
 end
 
 return M
