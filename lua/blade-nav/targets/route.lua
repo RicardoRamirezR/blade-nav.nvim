@@ -14,7 +14,7 @@ local M = {}
 --- @return string|nil The resolved file path or nil.
 local function resolve_controller_path(controller, psr4_mappings)
   if not psr4_mappings or vim.tbl_isempty(psr4_mappings) then
-    log.debug("BladeNav Route (resolve_controller_path): No PSR-4 mappings, using default conversion.")
+    log.debug("(resolve_controller_path): No PSR-4 mappings, using default conversion.")
     return controller:sub(1, 1):lower() .. controller:sub(2):gsub("\\", "/") .. ".php"
   end
 
@@ -22,16 +22,12 @@ local function resolve_controller_path(controller, psr4_mappings)
     if controller:sub(1, #namespace) == namespace then
       local relative_path = controller:sub(#namespace + 1):gsub("\\", "/") .. ".php"
       local resolved_path = path .. "/" .. relative_path
-      log.debug(
-        "BladeNav Route (resolve_controller_path): Matched namespace '%s'. Resolved path: %s",
-        namespace,
-        resolved_path
-      )
+      log.debug("(resolve_controller_path): Matched namespace '%s'. Resolved path: %s", namespace, resolved_path)
       return resolved_path
     end
   end
 
-  log.debug("BladeNav Route (resolve_controller_path): Controller '%s' not matched by any PSR-4 mapping.", controller)
+  log.debug("(resolve_controller_path): Controller '%s' not matched by any PSR-4 mapping.", controller)
   return nil
 end
 
@@ -40,16 +36,16 @@ end
 local function goto_method(method_name)
   local root, lang = ts_utils.gets_root_and_lang()
   if not root or not lang then
-    log.warn("BladeNav Route (goto_method): Could not get TS root/lang for current buffer.")
+    log.warn("(goto_method): Could not get TS root/lang for current buffer.")
     return
   end
 
   if not method_name or method_name == "" then
     method_name = "__invoke"
-    log.debug("BladeNav Route (goto_method): No method specified, defaulting to '__invoke'.")
+    log.debug("No method specified, defaulting to '__invoke'.")
   end
 
-  log.debug("BladeNav Route (goto_method): Searching for method '%s'.", method_name)
+  log.debug("Searching for method '%s'.", method_name)
 
   local query_template = [[
         (method_declaration
@@ -61,17 +57,13 @@ local function goto_method(method_name)
 
   local ts_status, ts = pcall(require, "vim.treesitter")
   if not ts_status or not ts then
-    log.warn("BladeNav Route (goto_method): vim.treesitter not available.")
+    log.warn("vim.treesitter not available.")
     return
   end
 
   local query_status, query = pcall(ts.query.parse, lang, query_string)
   if not query_status or not query then
-    log.error(
-      "BladeNav Route (goto_method): Failed to parse TS query for method '%s'. Error: %s",
-      method_name,
-      tostring(query)
-    )
+    log.error("Failed to parse TS query for method '%s'. Error: %s", method_name, tostring(query))
     return
   end
 
@@ -84,7 +76,7 @@ local function goto_method(method_name)
             local start_row, start_col, _, _ = node:range()
             vim.api.nvim_win_set_cursor(0, { start_row + 1, start_col })
             vim.cmd("normal! zz")
-            log.info("BladeNav Route (goto_method): Navigated to method '%s'.", method_name)
+            log.info("Navigated to method '%s'.", method_name)
             return
           end
         end
@@ -92,7 +84,7 @@ local function goto_method(method_name)
     end
   end
 
-  log.info("BladeNav Route (goto_method): Method '%s' not found in current buffer.", method_name)
+  log.info("Method '%s' not found in current buffer.", method_name)
 end
 
 --- Gets target information if the cursor is on a route reference.
@@ -150,7 +142,7 @@ function M.resolve(target_info)
 
   local route_map = laravel_utils.get_route_list(route_name)
   if not route_map or not route_map[route_name] then
-    log.warn("BladeNav Route: Route definition for '%s' not found.", route_name)
+    log.warn("Route definition for '%s' not found.", route_name)
     return false
   end
 
@@ -159,38 +151,29 @@ function M.resolve(target_info)
   local method = route_definition.method
 
   if not controller or controller == "" then
-    log.warn("BladeNav Route: No controller defined for route '%s'.", route_name)
+    log.warn("No controller defined for route '%s'.", route_name)
     return false
   end
 
-  log.debug("BladeNav Route: Found definition for '%s': controller=%s, method=%s", route_name, controller, method)
+  log.debug("Found definition for '%s': controller=%s, method=%s", route_name, controller, method)
 
   local psr4_mappings = laravel_utils.get_psr4_mappings()
   if not psr4_mappings then
-    log.error("BladeNav Route: Failed to get PSR-4 mappings.")
+    log.error("Failed to get PSR-4 mappings.")
     return false
   end
 
   local controller_path = resolve_controller_path(controller, psr4_mappings)
   if not controller_path or not fs.path_exists(controller_path) or fs.is_dir(controller_path) then
-    log.warn("BladeNav Route: Controller file for '%s' not found or invalid: %s", controller, controller_path or "nil")
+    log.warn("Controller file for '%s' not found or invalid: %s", controller, controller_path or "nil")
     return false
   end
 
   local escaped_path = vim.fn.fnameescape(controller_path)
   vim.cmd("edit " .. escaped_path)
-  log.info("BladeNav Route: Opened controller file: %s", controller_path)
+  log.info("Opened controller file: %s", controller_path)
 
-  if method and method ~= "" then
-    goto_method(method)
-    log.info("BladeNav Route: Attempted to navigate to method '%s' in '%s'.", method, controller_path)
-    return true
-  end
-
-  log.info(
-    "BladeNav Route: Located and opened controller file '%s'. No method specified in route definition.",
-    controller_path
-  )
+  goto_method(method)
   return true
 end
 

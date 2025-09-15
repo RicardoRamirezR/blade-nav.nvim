@@ -152,6 +152,10 @@ function M.set(key, value)
   print("Set " .. key .. " to " .. value, cache.merged[key])
 end
 
+function M.disableDebug()
+  cache.merged.debug = false
+end
+
 function M.enableDebug()
   cache.merged.debug = true
 end

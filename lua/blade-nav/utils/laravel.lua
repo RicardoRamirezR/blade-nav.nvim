@@ -535,7 +535,6 @@ M.get_view_names = function(input, not_include_closing_tag)
   }
   local index
   local items = {}
-  require("blade-nav.core.config").get("debug", true)
   log.debug("get_view_names called with input: %s", input)
   for i, p in ipairs(patterns) do
     if input:match(p.pattern) and tbl.contains(p.ft, vim.bo.filetype) then
