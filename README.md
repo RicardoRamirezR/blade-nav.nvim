@@ -18,15 +18,7 @@ Enhance your Laravel/Blade development experience in Neovim with powerful naviga
 
 ## Demo
 
-### In a Blade view
-
-![x-livewire](https://github.com/RicardoRamirezR/blade-nav.nvim/assets/6526545/8e10106f-d28e-40dc-b0df-c45f0f842980)
-
-### From Controllers and Routes
-
-![gf-view](https://github.com/RicardoRamirezR/blade-nav.nvim/assets/6526545/e6ddb3ec-829f-4055-b8d1-581635bfb18c)
-
----
+https://github.com/user-attachments/assets/1b0aa688-93fe-4d87-b6ee-a6dbb96391ed
 
 ## Features
 
@@ -53,6 +45,11 @@ Enhance your Laravel/Blade development experience in Neovim with powerful naviga
         *   Laravel Configuration Keys (for `config()`)
         *   Laravel Environment Variables (for `env()`)
     *   Configurable inclusion of routes in completions.
+*   **Display values as signature information**:
+    *   Displays the config value in a floating window. 
+    *   Displays the .env value in a floating window. 
+*   **Display values as virtual text**:
+    *   Displays all key values as virtual text.
 *   **Vue Inertia Page Detection**:
     *   Identify and potentially navigate to Vue pages used within Inertia.js setups by parsing the page resolver configuration (e.g., in `app.js`).
 *   **Flexible Configuration**:
