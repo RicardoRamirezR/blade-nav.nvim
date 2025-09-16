@@ -49,7 +49,7 @@ https://github.com/user-attachments/assets/1b0aa688-93fe-4d87-b6ee-a6dbb96391ed
     *   Displays the config value in a floating window. 
     *   Displays the .env value in a floating window. 
 *   **Display values as virtual text**:
-    *   Displays all key values as virtual text.
+    *   Displays all config/.env key values as virtual text.
 *   **Vue Inertia Page Detection**:
     *   Identify and potentially navigate to Vue pages used within Inertia.js setups by parsing the page resolver configuration (e.g., in `app.js`).
 *   **Flexible Configuration**:

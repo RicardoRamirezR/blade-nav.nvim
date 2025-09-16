@@ -79,7 +79,6 @@ function M.get_target(context)
     log.debug("Found %d existing view file(s). Returning them as choices.", #existing_paths)
     final_choices = existing_paths
   else
-    log.debug("No existing view files found. Returning all %d potential paths as choices.", #all_calculated_paths)
     final_choices = { path }
   end
 
