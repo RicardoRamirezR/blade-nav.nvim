@@ -55,7 +55,7 @@ function M.get_target(context)
     return nil
   end
 
-  local raw_view_name = found_keys[#found_keys]
+  local raw_view_name = found_keys[1]
   if not raw_view_name or type(raw_view_name) ~= "string" or raw_view_name == "" then
     log.debug("Last extracted key is invalid or not a string: %s", vim.inspect(raw_view_name))
     return nil

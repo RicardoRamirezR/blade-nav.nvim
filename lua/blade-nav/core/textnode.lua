@@ -1,5 +1,7 @@
 -- lua/blade-nav/core/textnode.lua
 
+local log = require("blade-nav.utils.log")
+
 local M = {}
 local ts = vim.treesitter
 
