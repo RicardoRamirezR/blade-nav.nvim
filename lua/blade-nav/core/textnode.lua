@@ -625,8 +625,8 @@ function M.extract_directive(node, bufnr)
 
   local raw_directive_text = node_text(best, bufnr) or ""
   local directive_name = raw_directive_text:match("^@[%w_:-]+")
-      or raw_directive_text:match("^[%w_:-]+")
-      or raw_directive_text
+    or raw_directive_text:match("^[%w_:-]+")
+    or raw_directive_text
 
   local function extract_first_arg_from_param_text(text)
     if not text or text:match("^%s*$") then
@@ -701,6 +701,27 @@ function M.extract_directive(node, bufnr)
   end
 end
 
+local debug = false
+
+--- Debug printer (only prints if debug = true)
+local function dprint(text, fname, first_arg)
+  if not debug then
+    return
+  end
+
+  if fname then
+    if first_arg then
+      print("Extraído: " .. text .. " (" .. fname .. ") -> " .. first_arg)
+    else
+      print("Extraído: " .. text .. " (" .. fname .. ")")
+    end
+  else
+    print("Extraído: " .. tostring(text))
+  end
+end
+
+--- Try to extract interesting text from the current cursor position.
+--- Order matters: PHP calls > Blade components/tags > Blade directives.
 function M.get_text_node()
   local bufnr = vim.api.nvim_get_current_buf()
   local node = safe_get_node_at_cursor(bufnr)
@@ -709,26 +730,25 @@ function M.get_text_node()
   end
 
   local text, fname, first_arg = M.extract_php(node, bufnr)
-  if not text then
-    text, fname, first_arg = M.extract_directive(node, bufnr)
-  end
-  if not text then
-    text, fname, first_arg = M.extract_component(bufnr)
+  if text then
+    dprint(text, fname, first_arg)
+    return text, fname, first_arg
   end
 
-  if false then
-    if text and fname then
-      if first_arg then
-        print("Extracted text: " .. text .. " (" .. fname .. ") -> " .. first_arg)
-      else
-        print("Extracted text: " .. text .. " (" .. fname .. ")")
-      end
-    else
-      print("No interesting text found at cursor position")
-    end
+  text, fname, first_arg = M.extract_component(bufnr)
+  if text then
+    dprint(text, fname, first_arg)
+    return text, fname, first_arg
   end
 
-  return text, fname, first_arg
+  text, fname, first_arg = M.extract_directive(node, bufnr)
+  if text then
+    dprint(text, fname, first_arg)
+    return text, fname, first_arg
+  end
+
+  dprint("No se encontró texto relevante en la posición del cursor")
+  return nil, nil, nil
 end
 
 return M
