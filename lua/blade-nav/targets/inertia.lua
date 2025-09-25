@@ -9,18 +9,36 @@ local ts_utils = require("blade-nav.utils.treesitter")
 
 local M = {}
 
+function M.get_capabilities()
+  return {
+    targets = { "inertia", "Inertia::render" },
+    filetypes = { "php" },
+  }
+end
+
 --- Gets target information if the cursor is on an inertia reference.
 --- Supports inertia(), Interia::render().
 --- @param context BladeNavContext Context created by context.lua
 --- @return BladeNavTargetInfo|nil { type = "interia", name = "view.name" } or nil
 function M.get_target(context)
-  local line = context.line
-  local col_1 = context.cursor_col_1
-
-  if not line or col_1 <= 0 then
-    log.debug("Invalid line or cursor position.")
+  if context.filetype ~= "php" then
+    log.debug("Invalid context for inertia handler.")
     return nil
   end
+
+  if context.target and not vim.tbl_contains(M.get_capabilities().targets, context.target) then
+    return nil
+  end
+
+  if context.first_arg and context.target then
+    return {
+      type = "inertia",
+      name = context.first_arg,
+      ft = context.filetype,
+    }
+  end
+
+  local line = context.line
 
   log.debug("Processing line for inertia reference: %s", line)
 

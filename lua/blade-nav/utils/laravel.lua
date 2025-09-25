@@ -417,9 +417,9 @@ function M.get_component_paths(component_identifier, custom_search_paths)
     for _, custom_base_path in ipairs(custom_search_paths) do
       local normalized_custom_path = custom_base_path:gsub("/$", "")
       local custom_view_path = normalized_custom_path
-          .. "/components/"
-          .. component_identifier:gsub("%.", "/")
-          .. ".blade.php"
+        .. "/components/"
+        .. component_identifier:gsub("%.", "/")
+        .. ".blade.php"
       if fs.path_exists(custom_view_path) and not fs.is_dir(custom_view_path) then
         table.insert(final_choices, custom_view_path)
       end
@@ -516,28 +516,32 @@ end
 --- @param input string
 --- @return number, table
 M.get_view_names = function(input, not_include_closing_tag)
+  -- stylua: ignore start
   local patterns = {
-    { pattern = "to_route%(",        tpl = "to_route('%s')",           ft = { "blade", "php" }, fn = find_routes },
-    { pattern = "route%(",           tpl = "route('%s')",              ft = { "blade", "php" }, fn = find_routes },
-    { pattern = "<x%-",              tpl = "<x-%s />",                 ft = "blade",            fn = find_components },
-    { pattern = "<livewire",         tpl = "<livewire:%s />",          ft = "blade",            fn = find_livewire },
-    { pattern = "@component%(",      tpl = "@component('%s')",         ft = "blade",            fn = find_views },
-    { pattern = "@extends%(",        tpl = "@extends('%s')",           ft = "blade",            fn = find_views },
-    { pattern = "@include%(",        tpl = "@include('%s')",           ft = "blade",            fn = find_views },
-    { pattern = "@livewire%(",       tpl = "@livewire('%s')",          ft = "blade",            fn = find_livewire },
-    { pattern = "Route::view%(",     tpl = "Route::view('uri', '%s')", ft = "php",              fn = find_views },
-    { pattern = "View::make%(",      tpl = "View::make('%s')",         ft = "php",              fn = find_views },
-    { pattern = "view%(",            tpl = "view('%s')",               ft = "php",              fn = find_views },
-    { pattern = "inertia%(",         tpl = "inertia('%s')",            ft = "php",              fn = find_inertia },
-    { pattern = "Inertia::render%(", tpl = "Inertia::render('%s')",    ft = "php",              fn = find_inertia },
-    { pattern = "config%(",          tpl = "config('%s')",             ft = { "blade", "php" }, fn = find_config },
-    { pattern = "env%(",             tpl = "env('%s')",                ft = { "blade", "php" }, fn = find_env },
+    { pattern = "to_route%("        , tpl = "to_route('%s')"          , ft = { "blade" , "php" }, fn = find_routes     },
+    { pattern = "route%("           , tpl = "route('%s')"             , ft = { "blade" , "php" }, fn = find_routes     },
+    { pattern = "<x%-"              , tpl = "<x-%s />"                , ft = { "blade" }        , fn = find_components },
+    { pattern = "<livewire"         , tpl = "<livewire:%s />"         , ft = { "blade" }        , fn = find_livewire   },
+    { pattern = "@component%("      , tpl = "@component('%s')"        , ft = { "blade" }        , fn = find_views      },
+    { pattern = "@extends%("        , tpl = "@extends('%s')"          , ft = { "blade" }        , fn = find_views      },
+    { pattern = "@include%("        , tpl = "@include('%s')"          , ft = { "blade" }        , fn = find_views      },
+    { pattern = "@livewire%("       , tpl = "@livewire('%s')"         , ft = { "blade" }        , fn = find_livewire   },
+    { pattern = "Route::view%("     , tpl = "Route::view('uri', '%s')", ft = { "php" }          , fn = find_views      },
+    { pattern = "View::make%("      , tpl = "View::make('%s')"        , ft = { "php" }          , fn = find_views      },
+    { pattern = "view%("            , tpl = "view('%s')"              , ft = { "php" }          , fn = find_views      },
+    { pattern = "inertia%("         , tpl = "inertia('%s')"           , ft = { "php" }          , fn = find_inertia    },
+    { pattern = "Inertia::render%(" , tpl = "Inertia::render('%s')"   , ft = { "php" }          , fn = find_inertia    },
+    { pattern = "config%("          , tpl = "config('%s')"            , ft = "*"                , fn = find_config     },
+    { pattern = "Config::get%("     , tpl = "Config::get('%s')"       , ft = "*"                , fn = find_config     },
+    { pattern = "Config::set%("     , tpl = "Config::set('%s')"       , ft = "*"                , fn = find_config     },
+    { pattern = "env%("             , tpl = "env('%s')"               , ft = { "blade" , "php" }, fn = find_env        },
   }
+  -- stylua: ignore end
   local index
   local items = {}
   log.debug("get_view_names called with input: %s", input)
   for i, p in ipairs(patterns) do
-    if input:match(p.pattern) and tbl.contains(p.ft, vim.bo.filetype) then
+    if input:match(p.pattern) and (p.ft == "*" or vim.tbl_contains(p.ft, vim.bo.filetype)) then
       local names = p.fn()
       for _, name in ipairs(names) do
         if name then

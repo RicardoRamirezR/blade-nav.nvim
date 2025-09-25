@@ -7,18 +7,22 @@ local treesitter = require("blade-nav.utils.treesitter")
 
 local M = {}
 
---- Gets target information if the cursor is on a Livewire component reference.
---- Supports <livewire:name />, @livewire('name'), Livewire::mount('name').
---- @param context BladeNavContext Context created by context.lua
---- @return BladeNavTargetInfo|nil { type = "livewire", name = "component.name", choices = { ... } } or nil
-function M.get_target(context)
-  local line = context.line
+function M.get_capabilities()
+  return {
+    targets = { "livewire" },
+    filetypes = { "blade" },
+  }
+end
+
+--- Extracts the Livewire component identifier from the given line.
+--- @param line string
+--- @return string|nil Livewire component identifier, or nil if not found
+local function extract_component_identifier(line)
   if not line or not line:find("livewire") then
     log.debug("Line does not contain 'livewire'. Skipping handler.")
     return nil
   end
 
-  local component_identifier = nil
   local directive_name, arguments = treesitter.extract_first_blade_argument(line, "@livewire")
   log.debug(
     "Tried extract_first_blade_argument('@livewire'), got directive: '%s', args: %s",
@@ -26,6 +30,7 @@ function M.get_target(context)
     vim.inspect(arguments)
   )
 
+  local component_identifier = nil
   if directive_name and arguments and type(arguments) == "table" and #arguments > 0 then
     local first_arg = arguments[1]
     if type(first_arg) == "string" and first_arg ~= "" then
@@ -37,6 +42,29 @@ function M.get_target(context)
   if not component_identifier or component_identifier == "" then
     component_identifier = treesitter.extract_component(line, "livewire")
     log.debug("Tried extract_component('livewire'), got: %s", tostring(component_identifier))
+  end
+
+  return component_identifier
+end
+
+--- Gets target information if the cursor is on a Livewire component reference.
+--- Supports <livewire:name />, @livewire('name'), Livewire::mount('name').
+--- @param context BladeNavContext Context created by context.lua
+--- @return BladeNavTargetInfo|nil { type = "livewire", name = "component.name", choices = { ... } } or nil
+function M.get_target(context)
+  if context.filetype ~= "blade" then
+    log.debug("Not a Blade file.")
+    return nil
+  end
+  if context.target and context.target ~= "livewire" then
+    return nil
+  end
+
+  local component_identifier = nil
+  if context.first_arg and context.target then
+    component_identifier = context.first_arg
+  else
+    component_identifier = extract_component_identifier(context.line)
   end
 
   if not component_identifier or component_identifier == "" then

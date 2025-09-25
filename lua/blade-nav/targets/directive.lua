@@ -8,24 +8,26 @@ local treesitter = require("blade-nav.utils.treesitter")
 local M = {}
 
 local STANDARD_VIEW_DIR = "resources/views/"
+local DIRECTIVE_MULTI_PARAMS = {
+  "@includeWhen",
+  "@includeUnless",
+  "@includeFirst",
+}
 
-local function type_candidate(line)
-  local types = {
-    "@extends",
-    "@includeUnless",
-    "@includeFirst",
-    "@includeWhen",
-    "@includeIf",
-    "@include",
-    "@each",
-    "@component",
+function M.get_capabilities()
+  return {
+    targets = {
+      "@component",
+      "@each",
+      "@extends",
+      "@includeUnless",
+      "@includeFirst",
+      "@includeWhen",
+      "@includeIf",
+      "@include",
+    },
+    filetypes = { "blade" },
   }
-  for _, item in ipairs(types) do
-    if line:find(item, 1, true) then
-      return true, item
-    end
-  end
-  return false, nil
 end
 
 --- Gets target information if the cursor is on a Blade directive that references a view.
@@ -40,18 +42,19 @@ function M.get_target(context)
     return nil
   end
 
-  local line = context.line
-  local is_candidate, target_type = type_candidate(line)
-
-  log.debug("Processing line for Blade directive: %s, target %s", line, target_type)
-
-  if not is_candidate or not target_type then
-    log.debug("Line does not contain a recognized view candidate pattern.")
+  if context.target and not vim.tbl_contains(M.get_capabilities().targets, context.target) then
     return nil
   end
 
-  local col_1 = context.cursor_col_1
-  local directive_name, params = treesitter.extract_first_blade_argument(line, target_type)
+  local directive_name, params = nil, nil
+  if context.first_arg and not vim.tbl_contains(DIRECTIVE_MULTI_PARAMS, context.target) then
+    directive_name = context.target
+    params = { context.first_arg }
+  else
+    local line = context.line
+    log.debug("Processing line for Blade directive: %s, target %s", line, context.target)
+    directive_name, params = treesitter.extract_first_blade_argument(line, context.target)
+  end
 
   if not directive_name or not params then
     log.debug("No matching navigable Blade directive found on line.")

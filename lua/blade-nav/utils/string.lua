@@ -64,6 +64,8 @@ function M.get_keyword_pattern()
     "@include",
     "@livewire",
     "config",
+    "Config::get",
+    "Config::set",
     "env",
     "route",
     "to_route",

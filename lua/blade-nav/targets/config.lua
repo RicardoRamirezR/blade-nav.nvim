@@ -7,18 +7,31 @@ local treesitter = require("blade-nav.utils.treesitter")
 
 local M = {}
 
---- Gets target information if the cursor is on a config reference.
---- Uses the line-based parsing utility function.
---- @param context BladeNavContext Context created by context.lua
---- @return BladeNavTargetInfo|nil { type = "config", name = "key.name" } or { type = "env", name = "VAR_NAME" } or nil
+function M.get_capabilities()
+  return {
+    targets = { "config", "env", "Config::get", "Config::set" },
+    filetypes = { "*" },
+  }
+end
+
 --- Gets target information if the cursor is on a config reference.
 --- Uses the line-based parsing utility function and specific pattern matching for cursor position.
 --- Supports config(), env(), Config::get(), Config::set().
 --- @param context BladeNavContext Context created by context.lua
 --- @return BladeNavTargetInfo|nil { type = "config", name = "key.name" } or { type = "env", name = "VAR_NAME" } or nil
 function M.get_target(context)
-  local line = context.line
+  if context.target and not vim.tbl_contains(M.get_capabilities().targets, context.target) then
+    return nil
+  end
 
+  if context.first_arg and context.target then
+    if context.target == "env" then
+      return { type = "env", name = context.first_arg }
+    end
+    return { type = "config", name = context.first_arg }
+  end
+
+  local line = context.line
   log.debug("Processing line for config/env reference: %s", line)
 
   local found_keys_config = treesitter.extract_keys_from_code(line, "config")

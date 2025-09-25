@@ -6,6 +6,13 @@ local laravel = require("blade-nav.utils.laravel")
 
 local M = {}
 
+function M.get_capabilities()
+  return {
+    targets = { "component" },
+    filetypes = { "blade" },
+  }
+end
+
 --- Gets target information for an <x-...> component.
 --- @param context BladeNavContext Context created by context.lua
 --- @return BladeNavTargetInfo|nil { type = "component", name = "...", choices = { ... } } or nil
@@ -15,15 +22,23 @@ function M.get_target(context)
     return nil
   end
 
-  local line = context.line
-  if not line then
-    log.debug("Invalid line.")
+  if context.target and context.target ~= "component" then
     return nil
   end
+  local component_identifier = nil
+  if context.first_arg then
+    component_identifier = context.first_arg
+  else
+    local line = context.line
+    if not line then
+      log.debug("Invalid line.")
+      return nil
+    end
 
-  log.debug("Processing line for <x-...> component: %s", line)
+    log.debug("Processing line for <x-...> component: %s", line)
 
-  local component_identifier = treesitter.extract_component(line, "^x")
+    component_identifier = treesitter.extract_component(line, "^x")
+  end
 
   if not component_identifier or component_identifier == "" then
     log.debug("No <x-...> component found on line by utility.")

@@ -1,4 +1,5 @@
 -- lua/blade-nav/targets/init.lua
+
 local log = require("blade-nav.utils.log")
 local uv = vim.loop
 
@@ -8,6 +9,7 @@ M._handlers = {}
 M._handler_order = {}
 M._handler_modules = {}
 M._failed_handlers = {}
+M._handler_capabilities = {}
 
 local function normalize_choices(choices)
   local normalized = {}
@@ -31,8 +33,37 @@ local function register_handler(name, handler)
   if type(handler.resolve) ~= "function" then
     error("Handler for '" .. name .. "' must have a 'resolve' function.")
   end
+
   M._handlers[name] = handler
   log.debug("Registered target handler: %s", name)
+end
+
+--- Load capabilities for a handler (lazy loading).
+--- @param name string
+--- @return boolean
+local function ensure_capabilities_loaded(name)
+  if M._handler_capabilities[name] then
+    return true
+  end
+
+  local handler = M._handlers[name]
+  if not handler then
+    return false
+  end
+
+  if type(handler.get_capabilities) == "function" then
+    local ok, capabilities = pcall(handler.get_capabilities)
+    if ok and capabilities then
+      M._handler_capabilities[name] = capabilities
+      log.debug("Loaded capabilities for handler '%s': %s", name, vim.inspect(capabilities))
+      return true
+    else
+      log.warn("Failed to get capabilities for handler '%s'", name)
+    end
+  end
+
+  M._handler_capabilities[name] = false
+  return false
 end
 
 --- Ensure a handler module is loaded (lazy require).
@@ -58,6 +89,64 @@ local function ensure_handler_loaded(name)
   log.error("Failed to load target handler '%s' (%s): %s", name, module_path, tostring(mod))
   M._failed_handlers[name] = true
   return false
+end
+
+--- Check if filetype matches capabilities.
+--- @param capabilities table
+--- @param filetype string|nil
+--- @return boolean
+local function is_filetype_supported(capabilities, filetype)
+  if not capabilities.filetypes or not filetype then
+    return true
+  end
+
+  return vim.tbl_contains(capabilities.filetypes, filetype) or vim.tbl_contains(capabilities.filetypes, "*")
+end
+
+--- Check if handler can handle the given context based on capabilities.
+--- @param handler_name string
+--- @param context BladeNavContext
+--- @return boolean
+local function can_handler_process_context(handler_name, context)
+  if not ensure_handler_loaded(handler_name) then
+    return false
+  end
+
+  ensure_capabilities_loaded(handler_name)
+
+  local capabilities = M._handler_capabilities[handler_name]
+  if not capabilities then
+    return true
+  end
+
+  if not is_filetype_supported(capabilities, context.filetype) then
+    return false
+  end
+
+  if not context.target then
+    return true
+  end
+
+  if capabilities.targets then
+    return vim.tbl_contains(capabilities.targets, context.target)
+  end
+
+  return true
+end
+
+--- Get relevant handlers for the given context.
+--- @param context BladeNavContext
+--- @return string[]
+local function get_relevant_handlers(context)
+  local relevant = {}
+
+  for _, name in ipairs(M._handler_order) do
+    if can_handler_process_context(name, context) then
+      table.insert(relevant, name)
+    end
+  end
+
+  return relevant
 end
 
 --- Discover handler files in a directory.
@@ -96,6 +185,7 @@ function M.load_handlers(handler_module_base, handler_dir_path, config)
   M._handlers = {}
   M._handler_order = {}
   M._handler_modules = {}
+  M._handler_capabilities = {}
   M._failed_handlers = M._failed_handlers or {}
 
   if not handler_dir_path then
@@ -143,23 +233,23 @@ function M.show_choices(title, choices)
     local action_state = require("telescope.actions.state")
 
     pickers
-        .new({}, {
-          prompt_title = title,
-          finder = finders.new_table(choices),
-          sorter = conf.generic_sorter({}),
-          attach_mappings = function(prompt_bufnr, _)
-            actions.select_default:replace(function()
-              actions.close(prompt_bufnr)
-              local selection = action_state.get_selected_entry()
-              if selection and selection[1] then
-                local filename = selection[1]:gsub("%d+: ", "")
-                vim.cmd("edit " .. vim.fn.fnameescape(filename))
-              end
-            end)
-            return true
-          end,
-        })
-        :find()
+      .new({}, {
+        prompt_title = title,
+        finder = finders.new_table(choices),
+        sorter = conf.generic_sorter({}),
+        attach_mappings = function(prompt_bufnr, _)
+          actions.select_default:replace(function()
+            actions.close(prompt_bufnr)
+            local selection = action_state.get_selected_entry()
+            if selection and selection[1] then
+              local filename = selection[1]:gsub("%d+: ", "")
+              vim.cmd("edit " .. vim.fn.fnameescape(filename))
+            end
+          end)
+          return true
+        end,
+      })
+      :find()
   else
     vim.ui.select(choices, { prompt = title }, function(choice)
       if choice then
@@ -174,9 +264,24 @@ end
 --- @param context BladeNavContext
 --- @return boolean
 function M.resolve_target(context)
-  log.debug("Starting target resolution")
+  log.debug(
+    "Starting target resolution for context: %s",
+    vim.inspect({
+      target = context.target,
+      filetype = context.filetype,
+    })
+  )
 
-  for _, name in ipairs(M._handler_order) do
+  local relevant_handlers = get_relevant_handlers(context)
+
+  if #relevant_handlers == 0 then
+    log.debug("No relevant handlers found for context")
+    return false
+  end
+
+  log.debug("Found %d relevant handlers: %s", #relevant_handlers, vim.inspect(relevant_handlers))
+
+  for _, name in ipairs(relevant_handlers) do
     if not ensure_handler_loaded(name) then
       goto continue
     end
@@ -214,8 +319,42 @@ function M.resolve_target(context)
     ::continue::
   end
 
-  log.debug("No handler matched")
+  log.debug("No handler successfully resolved the target")
   return false
+end
+
+--- Get debugging information about handlers.
+--- @return table
+function M.get_handler_info()
+  return {
+    loaded = vim.tbl_keys(M._handlers),
+    registered = M._handler_order,
+    capabilities = vim.tbl_filter(function(v)
+      return v ~= false
+    end, M._handler_capabilities),
+    failed = vim.tbl_keys(M._failed_handlers),
+    modules = M._handler_modules,
+  }
+end
+
+--- Get capabilities for a specific handler.
+--- @param handler_name string
+--- @return table|nil
+function M.get_handler_capabilities(handler_name)
+  if not ensure_handler_loaded(handler_name) then
+    return nil
+  end
+
+  ensure_capabilities_loaded(handler_name)
+  local caps = M._handler_capabilities[handler_name]
+  return caps ~= false and caps or nil
+end
+
+--- List handlers that can process the given context.
+--- @param context BladeNavContext
+--- @return string[]
+function M.get_compatible_handlers(context)
+  return get_relevant_handlers(context)
 end
 
 return M

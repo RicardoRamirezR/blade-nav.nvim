@@ -60,6 +60,60 @@ local function log_raw(level_str, message)
   end)
 end
 
+local table_unpack = table.unpack or unpack
+
+local function count_format_specifiers(fmt)
+  local i = 1
+  local len = #fmt
+  local count = 0
+  -- conversion letters que queremos contar (ampliable)
+  local conv_set = {
+    d = true,
+    i = true,
+    u = true,
+    o = true,
+    x = true,
+    X = true,
+    f = true,
+    F = true,
+    e = true,
+    E = true,
+    g = true,
+    G = true,
+    c = true,
+    s = true,
+    q = true,
+    p = true,
+  }
+  while i <= len do
+    local ch = fmt:sub(i, i)
+    if ch == "%" then
+      local nextch = fmt:sub(i + 1, i + 1)
+      if nextch == "%" then
+        -- "%%" -> literal %, saltarlo
+        i = i + 2
+      else
+        -- avanzar hasta encontrar la letra de conversión (o salir)
+        local j = i + 1
+        while j <= len do
+          local letter = fmt:sub(j, j)
+          if letter:match("%a") then
+            if conv_set[letter] then
+              count = count + 1
+            end
+            break
+          end
+          j = j + 1
+        end
+        i = j + 1
+      end
+    else
+      i = i + 1
+    end
+  end
+  return count
+end
+
 --- Log a debug message if debug is enabled.
 --- @param msg string Format string
 --- @param ... any Arguments for format string and additional values to inspect
@@ -69,34 +123,45 @@ function M.debug(msg, ...)
   end
 
   local args = { ... }
-  local formatted_msg = msg
+  local format_count = count_format_specifiers(msg)
 
-  if #args > 0 then
-    local format_count = 0
-    for _ in msg:gmatch("%%[sdqfgGeioxXc]") do
-      format_count = format_count + 1
+  for i = #args + 1, format_count do
+    args[i] = "<nil>"
+  end
+
+  local fmt_args = {}
+  for i = 1, math.max(#args, format_count) do
+    local a = args[i]
+    if a == nil then
+      a = "<nil>"
+    elseif type(a) == "table" or type(a) == "boolean" then
+      a = vim.inspect(a)
+    elseif type(a) ~= "string" and type(a) ~= "number" then
+      a = tostring(a)
     end
+    table.insert(fmt_args, a)
+  end
 
-    if format_count > 0 and format_count <= #args then
-      local format_args = {}
-      for i = 1, format_count do
-        table.insert(format_args, args[i])
+  local ok, formatted_msg = pcall(string.format, msg, table_unpack(fmt_args))
+  if ok then
+    if #args > format_count then
+      local extra_parts = {}
+      for i = format_count + 1, #args do
+        table.insert(extra_parts, vim.inspect(args[i]))
       end
-      formatted_msg = string.format(msg, unpack(format_args))
-
-      if #args > format_count then
-        local extra_parts = {}
-        for i = format_count + 1, #args do
-          table.insert(extra_parts, vim.inspect(args[i]))
-        end
+      if #extra_parts > 0 then
         formatted_msg = formatted_msg .. " " .. table.concat(extra_parts, " ")
       end
-    else
-      local arg_parts = {}
-      for _, arg in ipairs(args) do
-        table.insert(arg_parts, vim.inspect(arg))
-      end
+    end
+  else
+    local arg_parts = {}
+    for _, a in ipairs(args) do
+      table.insert(arg_parts, vim.inspect(a))
+    end
+    if #arg_parts > 0 then
       formatted_msg = msg .. " " .. table.concat(arg_parts, " ")
+    else
+      formatted_msg = msg
     end
   end
 

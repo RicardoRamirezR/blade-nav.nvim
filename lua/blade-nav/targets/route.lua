@@ -8,6 +8,13 @@ local ts_utils = require("blade-nav.utils.treesitter")
 
 local M = {}
 
+function M.get_capabilities()
+  return {
+    targets = { "route", "to_route" },
+    filetypes = { "*" },
+  }
+end
+
 --- Resolves the controller path based on PSR-4 mappings.
 --- @param controller string The full controller class name (e.g., App\Http\Controllers\UserController).
 --- @param psr4_mappings table The PSR-4 mappings from composer.json.
@@ -92,20 +99,25 @@ end
 --- @param context BladeNavContext Context created by context.lua
 --- @return BladeNavTargetInfo|nil { type = "route", name = "route.name" } or nil
 function M.get_target(context)
-  local line = context.line
-  local col_1 = context.cursor_col_1
-
-  if not line or col_1 <= 0 then
-    log.debug("Invalid line or cursor position.")
+  if context.target and not vim.tbl_contains(M.get_capabilities().targets, context.target) then
     return nil
   end
+
+  if context.first_arg and context.target then
+    return {
+      type = "route",
+      name = context.first_arg,
+    }
+  end
+
+  local line = context.line
 
   log.debug("Processing line for route reference: %s", line)
 
   local found_keys_route = ts_utils.extract_keys_from_code(line, "route")
   log.debug("Found keys for 'route': %s", vim.inspect(found_keys_route))
 
-  if #found_keys_route == 1 then
+  if #found_keys_route >= 1 then
     local key_info = found_keys_route[1]
     return {
       type = "route",
@@ -116,7 +128,7 @@ function M.get_target(context)
   local found_keys_to_route = ts_utils.extract_keys_from_code(line, "to_route")
   log.debug("Found keys for 'to_route': %s", vim.inspect(found_keys_to_route))
 
-  if #found_keys_to_route == 1 then
+  if #found_keys_to_route >= 1 then
     local key_info = found_keys_to_route[1]
     return {
       type = "to_route",

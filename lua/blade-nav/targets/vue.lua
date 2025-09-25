@@ -5,6 +5,12 @@ local vue_imports = require("blade-nav.utils.vue-imports")
 
 local M = {}
 
+function M.get_capabilities()
+  return {
+    filetypes = { "vue" },
+  }
+end
+
 function M.get_target(context)
   log.debug("Vue target enabled: %s", context.filetype)
   if context.filetype ~= "vue" then

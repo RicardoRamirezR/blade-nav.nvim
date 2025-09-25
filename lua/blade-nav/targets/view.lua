@@ -8,15 +8,24 @@ local M = {}
 
 local VIEW_DIR = "resources/views/"
 
+function M.get_capabilities()
+  return {
+    targets = { "markdown", "Route::view", "View::make", "view" },
+    filetypes = { "blade", "php" },
+  }
+end
+
 --- Checks if the line contains a recognizable view-related function call or directive pattern.
 --- @param line string The line of text.
 --- @return boolean, string|nil True and the target type ("view", "route", "markdown") if found, false/nil otherwise.
 local function type_candidate(line)
+  -- stylua: ignore start
   local types = {
-    { pattern = "Route::view", target_type = "route" },
-    { pattern = "View::make",  target_type = "view" },
-    { pattern = "view",        target_type = "view" },
-    { pattern = "markdown",    target_type = "markdown" },
+    { pattern = "Route::view" , target_type = "route" },
+    { pattern = "View::make"  , target_type = "view" },
+    { pattern = "view"        , target_type = "view" },
+    { pattern = "markdown"    , target_type = "markdown" },
+    -- stylua: ignore end
   }
 
   for _, item in ipairs(types) do
@@ -45,17 +54,25 @@ function M.get_target(context)
     return nil
   end
 
-  log.debug("Line identified as candidate type: %s", target_type)
-
-  local found_keys = treesitter.extract_keys_from_code(line, target_type)
-
-  log.debug("Found keys: %s", vim.inspect(found_keys))
-  if not found_keys or type(found_keys) ~= "table" or #found_keys == 0 then
-    log.debug("No view keys found by ts_utils.extract_keys_from_code for type '%s'.", target_type)
-    return nil
+  local raw_view_name = nil
+  if context.first_arg and context.target then
+    raw_view_name = context.first_arg
   end
 
-  local raw_view_name = found_keys[1]
+  log.debug("Line identified as candidate type: %s", target_type)
+
+  if not raw_view_name then
+    local found_keys = treesitter.extract_keys_from_code(line, target_type)
+
+    log.debug("Found keys: %s", vim.inspect(found_keys))
+    if not found_keys or type(found_keys) ~= "table" or #found_keys == 0 then
+      log.debug("No view keys found by ts_utils.extract_keys_from_code for type '%s'.", target_type)
+      return nil
+    end
+
+    raw_view_name = found_keys[1]
+  end
+
   if not raw_view_name or type(raw_view_name) ~= "string" or raw_view_name == "" then
     log.debug("Last extracted key is invalid or not a string: %s", vim.inspect(raw_view_name))
     return nil
