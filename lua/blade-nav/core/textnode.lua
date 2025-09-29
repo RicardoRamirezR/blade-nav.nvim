@@ -288,14 +288,26 @@ function M.extract_php(node, bufnr)
     return nil, nil, nil
   end
 
-  local function get_first_argument(target_node, bufnr)
+  local function get_first_argument(target_node, bufnr, function_name)
     for child in target_node:iter_children() do
       if child:type() == "arguments" then
+        local args = {}
         for arg_child in child:iter_children() do
           if arg_child:type() ~= "(" and arg_child:type() ~= ")" and arg_child:type() ~= "," then
             local raw_arg = node_text(arg_child, bufnr)
-            return clean_text(raw_arg), extract_first_argument(raw_arg)
+            args[#args + 1] = clean_text(raw_arg)
           end
+        end
+
+        if #args > 0 then
+          -- Excepción: en Route::view el "first_arg" de interés es el segundo parámetro
+          local index = 1
+          if function_name == "Route::view" and #args >= 2 then
+            index = 2
+          end
+
+          local raw = args[index]
+          return raw, extract_first_argument(raw)
         end
       end
     end
@@ -310,7 +322,7 @@ function M.extract_php(node, bufnr)
         function_name = node_text(function_node, bufnr)
       end
 
-      local first_arg, clean_first_arg = get_first_argument(target_node, bufnr)
+      local first_arg, clean_first_arg = get_first_argument(target_node, bufnr, function_name)
       if first_arg then
         return function_name .. "(" .. first_arg .. ")", function_name, clean_first_arg
       else
@@ -329,7 +341,7 @@ function M.extract_php(node, bufnr)
         function_name = scope_text .. "::" .. name_text
       end
 
-      local first_arg, clean_first_arg = get_first_argument(target_node, bufnr)
+      local first_arg, clean_first_arg = get_first_argument(target_node, bufnr, function_name)
       if first_arg then
         return function_name .. "(" .. first_arg .. ")", function_name, clean_first_arg
       else
@@ -419,21 +431,24 @@ function M.extract_component(bufnr)
     if t == "tag_name" then
       local parent = target_node:parent()
       if parent and (parent:type() == "start_tag" or parent:type() == "self_closing_tag") then
+        -- FIX: En lugar de usar solo el texto del tag_name, usar el texto completo del parent
         local full_text = clean_text(node_text(parent, bufnr))
-        local tag_name = clean_text(node_text(target_node, bufnr))
+        local tag_name = full_text:match("<%s*([%w%-:%.]+)") -- Extraer del texto completo
 
         local component_path = nil
         local component_type = "component"
 
-        if tag_name:match("^x%-") then
-          component_path = tag_name:gsub("^x%-", "")
-          component_type = "component"
-        elseif tag_name:match("^livewire:") then
-          component_path = tag_name:gsub("^livewire:", "")
-          component_type = "livewire"
-        else
-          component_path = tag_name
-          component_type = "component"
+        if tag_name then
+          if tag_name:match("^x%-") then
+            component_path = tag_name:gsub("^x%-", "")
+            component_type = "component"
+          elseif tag_name:match("^livewire:") then
+            component_path = tag_name:gsub("^livewire:", "")
+            component_type = "livewire"
+          else
+            component_path = tag_name
+            component_type = "component"
+          end
         end
 
         return full_text, component_type, component_path
@@ -444,7 +459,7 @@ function M.extract_component(bufnr)
       for child in target_node:iter_children() do
         if child:type() == "start_tag" then
           local full_text = clean_text(node_text(child, bufnr))
-          local tag_name = full_text:match("<%s*([%w%-:]+)")
+          local tag_name = full_text:match("<%s*([%w%-:%.]+)")
 
           local component_path = nil
           local component_type = "component"
@@ -473,7 +488,7 @@ function M.extract_component(bufnr)
   while current do
     local text, component_type, component_path = extract_from_component_node(current)
     if text and component_type then
-      local tag_name = text:match("<%s*([%w%-:]+)")
+      local tag_name = text:match("<%s*([%w%-:%.]+)")
       if tag_name and is_target(tag_name, "component") then
         return text, component_type, component_path
       end
@@ -484,221 +499,408 @@ function M.extract_component(bufnr)
   return nil, nil, nil
 end
 
-function M.extract_directive(node, bufnr)
-  bufnr = bufnr or vim.api.nvim_get_current_buf()
-  local cursor = vim.api.nvim_win_get_cursor(0)
-  local row, col = cursor[1] - 1, cursor[2]
+-- Helper: read buffer text between two positions (inclusive start, inclusive endcol)
+local function get_text_range(bufnr, sr, sc, er, ec)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, sr, er + 1, false)
+  if not lines or #lines == 0 then
+    return ""
+  end
+  if sr == er then
+    return string.sub(lines[1], sc + 1, ec)
+  end
+  local out = {}
+  out[#out + 1] = string.sub(lines[1], sc + 1)
+  for i = 2, #lines - 1 do
+    out[#out + 1] = lines[i]
+  end
+  out[#out + 1] = string.sub(lines[#lines], 1, ec)
+  return table.concat(out, "\n")
+end
 
-  local ok, parser = pcall(vim.treesitter.get_parser, bufnr, "blade")
-  if not ok or not parser then
-    return nil, "No Blade parser available", nil
+-- Find matching closing parenthesis starting from directive start (returns full substring up to matching ')', and end row/col)
+local function find_closing_paren(bufnr, start_row, start_col)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, start_row, -1, false)
+  if not lines or #lines == 0 then
+    return nil
   end
 
-  local trees = parser:parse()
-  if not trees or #trees == 0 then
-    return nil, "No parse tree", nil
-  end
-
-  local root = trees[1]:root()
-  local directives = {}
-  local function collect_directives(n)
-    for child in n:iter_children() do
-      if child:type() == "directive" then
-        table.insert(directives, child)
-      end
-      collect_directives(child)
-    end
-  end
-  collect_directives(root)
-
-  if #directives == 0 then
-    return nil, nil, nil
-  end
-
-  local function abs_pos(r, c)
-    return r * 100000 + c
-  end
-
-  local cursor_abs = abs_pos(row, col)
-  local best = nil
-  local best_score = math.huge
-
-  for _, d in ipairs(directives) do
-    local sr, sc, er, ec = d:range()
-    if sr <= row and row <= er then
-      local score = (row - sr) * 1000 + math.max(0, col - sc)
-      if score < best_score then
-        best = d
-        best_score = score
-      end
-    elseif sr <= row then
-      local score = (row - sr) * 1000 + math.abs(col - sc)
-      if score < best_score then
-        best = d
-        best_score = score
-      end
-    end
-  end
-
-  if not best then
-    local best_before = nil
-    local best_before_pos = -1
-    for _, d in ipairs(directives) do
-      local sr, sc = d:range()
-      local start_abs = abs_pos(sr, sc)
-      if start_abs <= cursor_abs and start_abs > best_before_pos then
-        best_before_pos = start_abs
-        best_before = d
-      end
-    end
-    best = best_before
-  end
-
-  if not best and #directives > 0 then
-    best = directives[1]
-    for _, d in ipairs(directives) do
-      local sr, sc = d:range()
-      local start_abs = abs_pos(sr, sc)
-      local best_start = abs_pos(best:range())
-      if start_abs < best_start then
-        best = d
-      end
-    end
-  end
-
-  if not best then
-    return nil, nil, nil
-  end
-
+  local row = start_row
+  local col = start_col
+  local found_open = false
+  local depth = 0
+  local in_quote = nil
   local parts = {}
-  local sibling = best:next_named_sibling()
-  while sibling and sibling:type() == "parameter" do
-    local txt = node_text(sibling, bufnr)
-    if txt and txt:match("%S") then
-      table.insert(parts, txt)
-    end
-    sibling = sibling:next_named_sibling()
-  end
 
-  if #parts == 0 then
-    local parent = best:parent()
-    if parent then
-      local collect = false
-      for child in parent:iter_children() do
-        if collect and child:type() == "parameter" then
-          local txt = node_text(child, bufnr)
-          if txt and txt:match("%S") then
-            table.insert(parts, txt)
-          end
-        end
-        if child == best then
-          collect = true
-        end
-      end
-    end
-  end
+  while row - start_row + 1 <= #lines do
+    local line = lines[row - start_row + 1] or ""
+    local line_len = #line
+    while col <= line_len do
+      local ch = line:sub(col + 1, col + 1)
+      parts[#parts + 1] = ch
 
-  if #parts == 0 then
-    local up = best
-    while up do
-      local prev = up:prev_named_sibling()
-      while prev do
-        if prev:type() == "parameter" then
-          local txt = node_text(prev, bufnr)
-          if txt and txt:match("%S") then
-            table.insert(parts, 1, txt)
-          end
-        else
-          break
-        end
-        prev = prev:prev_named_sibling()
-      end
-      up = up:parent()
-    end
-  end
-
-  local parameter_text = ""
-  if #parts > 0 then
-    parameter_text = table.concat(parts, "")
-    parameter_text = clean_text(parameter_text)
-  end
-
-  local raw_directive_text = node_text(best, bufnr) or ""
-  local directive_name = raw_directive_text:match("^@[%w_:-]+")
-    or raw_directive_text:match("^[%w_:-]+")
-    or raw_directive_text
-
-  local function extract_first_arg_from_param_text(text)
-    if not text or text:match("^%s*$") then
-      return nil
-    end
-    local inner = text:match("^%s*%((.*)%)%s*$") or text
-    local i, len = 1, #inner
-    local nesting = 0
-    local in_quote = nil
-    local escaped = false
-    local buf = {}
-    while i <= len do
-      local ch = inner:sub(i, i)
-      if in_quote then
-        if ch == "\\" and not escaped then
-          escaped = true
-          table.insert(buf, ch)
-        else
-          if ch == in_quote and not escaped then
-            in_quote = nil
-            table.insert(buf, ch)
-          else
-            table.insert(buf, ch)
-            escaped = false
-          end
+      if not found_open then
+        if ch == "(" then
+          found_open = true
+          depth = 1
         end
       else
-        if ch == "'" or ch == '"' then
-          in_quote = ch
-          table.insert(buf, ch)
-        elseif ch == "(" or ch == "[" or ch == "{" then
-          nesting = nesting + 1
-          table.insert(buf, ch)
-        elseif ch == ")" or ch == "]" or ch == "}" then
-          if nesting > 0 then
-            nesting = nesting - 1
-            table.insert(buf, ch)
-          else
-            break
+        if in_quote then
+          if ch == "\\" then
+            -- include escaped char (if inside same line)
+            col = col + 1
+            local nxt = line:sub(col + 1, col + 1)
+            if nxt ~= "" then
+              parts[#parts + 1] = nxt
+            end
+          elseif ch == in_quote then
+            in_quote = nil
           end
-        elseif ch == "," and nesting == 0 then
-          break
         else
-          table.insert(buf, ch)
+          if ch == "'" or ch == '"' or ch == "`" then
+            in_quote = ch
+          elseif ch == "(" then
+            depth = depth + 1
+          elseif ch == ")" then
+            depth = depth - 1
+            if depth == 0 then
+              local full = table.concat(parts)
+              -- return full string and end position (row, col) where col is 0-based index of ')'
+              return full, row, col
+            end
+          end
         end
       end
-      i = i + 1
+
+      col = col + 1
     end
-    local s = table.concat(buf)
-    s = clean_text(s)
-    if s == "" then
+
+    -- newline char between lines
+    parts[#parts + 1] = "\n"
+    row = row + 1
+    col = 0
+  end
+
+  return nil
+end
+
+-- Split a parameter block into top-level parameters (ignore commas inside quotes/brackets/parentheses)
+local function split_top_level_params(s)
+  if not s then
+    return {}
+  end
+  local i, len = 1, #s
+  local depth = 0
+  local in_quote = nil
+  local acc = {}
+  local cur = {}
+
+  while i <= len do
+    local c = s:sub(i, i)
+    if in_quote then
+      if c == "\\" then
+        cur[#cur + 1] = c
+        i = i + 1
+        local nxt = s:sub(i, i)
+        if nxt ~= "" then
+          cur[#cur + 1] = nxt
+        end
+      elseif c == in_quote then
+        in_quote = nil
+        cur[#cur + 1] = c
+      else
+        cur[#cur + 1] = c
+      end
+    else
+      if c == "'" or c == '"' or c == "`" then
+        in_quote = c
+        cur[#cur + 1] = c
+      elseif c == "(" or c == "[" or c == "{" then
+        depth = depth + 1
+        cur[#cur + 1] = c
+      elseif c == ")" or c == "]" or c == "}" then
+        if depth > 0 then
+          depth = depth - 1
+        end
+        cur[#cur + 1] = c
+      elseif c == "," and depth == 0 then
+        local item = table.concat(cur)
+        acc[#acc + 1] = clean_text(item)
+        cur = {}
+      else
+        cur[#cur + 1] = c
+      end
+    end
+    i = i + 1
+  end
+
+  if #cur > 0 then
+    acc[#acc + 1] = clean_text(table.concat(cur))
+  end
+  return acc
+end
+
+-- Collect directives and param_nodes grouped by parent (params attached only to immediately preceding directive)
+local function collect_directives(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  local ft = "blade"
+  local ok, parser = pcall(ts.get_parser, bufnr, ft)
+  if not ok or not parser then
+    return {}
+  end
+  local tree = parser:parse()[1]
+  if not tree then
+    return {}
+  end
+  local root = tree:root()
+
+  local query_str = [[
+    (directive) @directive
+    (parameter) @parameter
+  ]]
+
+  local parse_query = (ts.query and ts.query.parse) or ts.parse_query
+  local okq, q = pcall(parse_query, ft, query_str)
+  if not okq or not q then
+    return {}
+  end
+
+  -- group by parent node
+  local groups = {}
+  for id, cap_node in q:iter_captures(root, bufnr, 0, -1) do
+    local cap_name = (q.captures and q.captures[id]) or ""
+    local parent = cap_node:parent()
+    if parent then
+      local psr, psc, per, pec = parent:range()
+      local key = string.format("%d:%d:%d:%d", psr, psc, per, pec)
+      if not groups[key] then
+        groups[key] = { parent = parent, caps = {} }
+      end
+      local caps = groups[key].caps
+      caps[#caps + 1] = { name = cap_name, node = cap_node }
+    end
+  end
+
+  local directives = {}
+
+  for _, g in pairs(groups) do
+    table.sort(g.caps, function(a, b)
+      local ar, ac = a.node:range()
+      local br, bc = b.node:range()
+      if ar == br then
+        return ac < bc
+      end
+      return ar < br
+    end)
+
+    local current = nil
+    for _, cap in ipairs(g.caps) do
+      if cap.name == "directive" then
+        if current then
+          directives[#directives + 1] = current
+        end
+        local sr, sc, er, ec = cap.node:range()
+        local dir_text = node_text(cap.node, bufnr) or ""
+        current = {
+          name = dir_text:match("^@[%w_]+") or dir_text,
+          node_type = "directive",
+          directive_node = cap.node,
+          start = { sr, sc },
+          endpos = { er, ec },
+          param_nodes = {},
+          params = {}, -- will be replaced by split result later
+        }
+      elseif cap.name == "parameter" then
+        if current then
+          current.param_nodes[#current.param_nodes + 1] = cap.node
+          local psr, psc, per, pec = cap.node:range()
+          -- keep endpos updated to last parameter end (fallback)
+          current.endpos = { per, pec }
+        end
+      end
+    end
+
+    if current then
+      directives[#directives + 1] = current
+    end
+  end
+
+  table.sort(directives, function(a, b)
+    local ar, ac = a.start[1], a.start[2]
+    local br, bc = b.start[1], b.start[2]
+    if ar == br then
+      return ac < bc
+    end
+    return ar < br
+  end)
+
+  return directives
+end
+
+-- Find directive at cursor; build robust full_text and split params top-level
+function M.find_directive_at_cursor(node, bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  local directives = collect_directives(bufnr)
+  local r, c = get_cursor_pos()
+
+  for _, d in ipairs(directives) do
+    local sr, sc = unpack(d.start)
+    local er, ec = unpack(d.endpos)
+    local inside = (r > sr or (r == sr and c >= sc)) and (r < er or (r == er and c <= ec))
+    if inside then
+      -- attempt to find real closing paren after directive start
+      local raw_full, end_r, end_c = find_closing_paren(bufnr, sr, sc)
+      if raw_full then
+        d.full_text = clean_text(raw_full)
+        d.endpos = { end_r, end_c }
+      else
+        -- fallback: use from directive start to last param end (may miss trailing ')')
+        d.full_text = clean_text(get_text_range(bufnr, sr, sc, er, ec) or "")
+      end
+
+      -- extract parameter block (content inside the outermost parentheses)
+      local open_i = d.full_text and d.full_text:find("(", 1, true)
+      local close_i = d.full_text and #d.full_text
+      local param_block = nil
+      if open_i and close_i and close_i > open_i then
+        param_block = d.full_text:sub(open_i + 1, close_i - 1)
+      else
+        -- fallback: assemble from param_nodes raw text contiguous
+        if d.param_nodes and #d.param_nodes > 0 then
+          local p0 = d.param_nodes[1]
+          local last = d.param_nodes[#d.param_nodes]
+          local p0_sr, p0_sc = p0:range()
+          local _, _, last_er, last_ec = last:range()
+          param_block = get_text_range(bufnr, p0_sr, p0_sc, last_er, last_ec)
+        end
+      end
+
+      -- split into top-level params robustly
+      local params = split_top_level_params(param_block or "")
+      if #params == 0 and d.param_nodes and #d.param_nodes > 0 then
+        -- last resort: use raw param node texts joined
+        local acc = {}
+        for _, n in ipairs(d.param_nodes) do
+          acc[#acc + 1] = clean_text(node_text(n, bufnr) or "")
+        end
+        params = { table.concat(acc, ", ") }
+      end
+
+      d.params = params
+      d.first_arg = nil
+      if params and params[1] then
+        d.first_arg = extract_first_argument(params[1])
+      end
+
+      return d
+    end
+  end
+
+  return nil
+end
+
+--- Extract Blade directive info consistent with extract_php / extract_component contract.
+--- Returns: full_text (string), fname (string, like "@include"), first_arg (string | table)
+--- first_arg rules:
+---   - @extends, @include, @each -> first_arg = first parameter (cleaned string)
+---   - @includeWhen, @includeUnless -> first_arg = second parameter (cleaned string)
+---   - @includeFirst -> first_arg = table of all views inside the array (no [ ])
+function M.extract_directive(node, bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+  -- get the structured directive found at cursor (uses collect_directives / find_directive_at_cursor)
+  local d = M.find_directive_at_cursor(node, bufnr)
+  if not d then
+    return nil, nil, nil
+  end
+
+  -- full text and directive name
+  local full_text = d.full_text or (d.directive_node and node_text(d.directive_node, bufnr)) or nil
+  local fname = d.name or (full_text and full_text:match("^@[%w_]+")) or nil
+  if not fname then
+    return nil, nil, nil
+  end
+
+  -- small helpers
+  local function strip_quotes(s)
+    if not s then
       return nil
     end
-    return s
+    return s:gsub("^%s*['\"](.-)['\"]%s*$", "%1")
+  end
+
+  local function extract_views_from_array(raw)
+    if not raw then
+      return {}
+    end
+    raw = clean_text(raw)
+    -- remove outer brackets if present
+    if raw:match("^%[.*%]$") then
+      raw = raw:sub(2, -2)
+    end
+    local out = {}
+    -- extract quoted entries first
+    for v in raw:gmatch("%'([^']+)%'") do
+      out[#out + 1] = v
+    end
+    for v in raw:gmatch('%"([^"]+)%"') do
+      out[#out + 1] = v
+    end
+    -- fallback: split by top-level commas (simple)
+    if #out == 0 then
+      for item in raw:gmatch("([^,]+)") do
+        local c = strip_quotes(clean_text(item))
+        if c and c ~= "" then
+          out[#out + 1] = c
+        end
+      end
+    end
+    return out
   end
 
   local first_arg = nil
-  if parameter_text and parameter_text ~= "" then
-    local first_raw = extract_first_arg_from_param_text(parameter_text)
-    if first_raw then
-      first_arg = extract_first_argument(first_raw)
+  local params = d.params or {}
+
+  -- Decide which param(s) represent the view(s)
+  if fname == "@includeWhen" or fname == "@includeUnless" then
+    -- second parameter is the view
+    local candidate = params[2] or params[1]
+    if candidate then
+      first_arg = extract_first_argument(candidate) or strip_quotes(candidate) or clean_text(candidate)
+    end
+  elseif fname == "@includeFirst" then
+    -- first parameter is an array of views -> return ALL views (no brackets) as a table
+    local raw = params[1] or ""
+    local views = extract_views_from_array(raw)
+    if #views > 0 then
+      first_arg = views
+    else
+      -- fallback: if nothing parsed, attempt simple extract_first_argument
+      local maybe = extract_first_argument(raw)
+      if maybe then
+        first_arg = { maybe }
+      else
+        first_arg = {}
+      end
+    end
+  elseif fname == "@each" then
+    -- first param is main view, fourth param (if any) is the empty view
+    local views = {}
+    if params[1] then
+      views[#views + 1] = extract_first_argument(params[1]) or strip_quotes(params[1]) or clean_text(params[1])
+    end
+    if params[4] then
+      views[#views + 1] = extract_first_argument(params[4]) or strip_quotes(params[4]) or clean_text(params[4])
+    end
+    first_arg = views
+  else
+    -- default: first parameter is the view (@extends, @include, @each, @component, etc.)
+    local candidate = params[1]
+    if candidate then
+      first_arg = extract_first_argument(candidate) or strip_quotes(candidate) or clean_text(candidate)
     end
   end
 
-  if parameter_text and parameter_text ~= "" then
-    if not parameter_text:match("^%s*%b()$") then
-      parameter_text = "(" .. parameter_text .. ")"
-    end
-    return raw_directive_text .. parameter_text, directive_name, first_arg
-  else
-    return raw_directive_text, directive_name, nil
-  end
+  return full_text, fname, first_arg
 end
 
 local debug = false
@@ -708,15 +910,22 @@ local function dprint(text, fname, first_arg)
   if not debug then
     return
   end
+  local pos = vim.api.nvim_win_get_cursor(0)
+  local line_num = pos[1]
+  local line_content = "[" .. vim.api.nvim_buf_get_lines(0, line_num - 1, line_num, false)[1] .. "]"
+  local cur_pos = "Cursor at row=" .. pos[1] .. " col=" .. pos[2] .. " -> " .. line_content .. " -> "
 
   if fname then
     if first_arg then
-      print("Extraído: " .. text .. " (" .. fname .. ") -> " .. first_arg)
+      if type(first_arg) == "table" then
+        first_arg = table.concat(first_arg, ", ")
+      end
+      print(cur_pos .. "extracted: " .. text .. " -> " .. fname .. " -> " .. first_arg)
     else
-      print("Extraído: " .. text .. " (" .. fname .. ")")
+      print(cur_pos .. "extracted: " .. text .. " -> " .. fname .. "")
     end
   else
-    print("Extraído: " .. tostring(text))
+    print(cur_pos .. "extracted: " .. tostring(text))
   end
 end
 
@@ -750,5 +959,7 @@ function M.get_text_node()
   dprint("No se encontró texto relevante en la posición del cursor")
   return nil, nil, nil
 end
+
+M.get_text_node()
 
 return M

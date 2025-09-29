@@ -42,3 +42,4 @@ jobs:
           echo "Running tests with neovim=${{ matrix.neovim }}, fd=${{ matrix.fd }}"
           nvim --version
           make test
+
