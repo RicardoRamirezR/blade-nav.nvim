@@ -165,4 +165,37 @@ function M.find_files(path, extension, exclude_dirs)
   return vim.split(output, "\n", { trimempty = true })
 end
 
+--- Get a path relative to the project root (if inside it).
+--- Falls back to absolute path if outside.
+--- @param path string
+--- @return string
+function M.project_relative(path)
+  if not path or path == "" then
+    return path
+  end
+
+  local root = M.get_root_dir and M.get_root_dir() or vim.loop.cwd()
+  local abs = vim.fn.fnamemodify(vim.fn.resolve(path), ":p")
+  local normalized_root = vim.fs.normalize(vim.fn.fnamemodify(vim.fn.resolve(root), ":p"))
+
+  -- Ensure trailing slash for consistent comparison
+  if not normalized_root:match("/$") then
+    normalized_root = normalized_root .. "/"
+  end
+
+  if abs:find(normalized_root, 1, true) == 1 then
+    local rel = abs:sub(#normalized_root + 1)
+    return rel:gsub("^/", "")
+  end
+
+  return abs
+end
+
+function M.abs_path(p)
+  if not p or p == "" then
+    return p
+  end
+  return vim.fn.fnamemodify(p, ":p")
+end
+
 return M

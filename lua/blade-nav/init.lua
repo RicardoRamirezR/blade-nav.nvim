@@ -7,7 +7,7 @@ local blink_integration = require("blade-nav.integrations.blink")
 local coq_integration = require("blade-nav.integrations.coq")
 local targets = require("blade-nav.targets")
 local commands = require("blade-nav.commands")
-local annotations = require("blade-nav.annotations.values")
+local annotations = require("blade-nav.features.annotations")
 
 local M = {}
 

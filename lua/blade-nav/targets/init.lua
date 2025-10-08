@@ -1,5 +1,6 @@
 -- lua/blade-nav/targets/init.lua
 
+local choice = require("blade-nav.utils.choice")
 local log = require("blade-nav.utils.log")
 local uv = vim.loop
 
@@ -208,58 +209,6 @@ function M.load_handlers(handler_module_base, handler_dir_path, config)
   log.info("Registered %d handlers (lazy)", #M._handler_order)
 end
 
---- Show choices with Telescope if available, otherwise vim.ui.select.
---- @param title string
---- @param choices string[]
-function M.show_choices(title, choices)
-  if not choices or #choices == 0 then
-    log.warn("show_choices called with empty list")
-    return
-  end
-
-  if #choices == 1 then
-    vim.cmd("edit " .. vim.fn.fnameescape(choices[1]))
-    return
-  end
-
-  choices = normalize_choices(choices)
-
-  local ok, telescope = pcall(require, "telescope")
-  if ok and telescope then
-    local pickers = require("telescope.pickers")
-    local finders = require("telescope.finders")
-    local conf = require("telescope.config").values
-    local actions = require("telescope.actions")
-    local action_state = require("telescope.actions.state")
-
-    pickers
-      .new({}, {
-        prompt_title = title,
-        finder = finders.new_table(choices),
-        sorter = conf.generic_sorter({}),
-        attach_mappings = function(prompt_bufnr, _)
-          actions.select_default:replace(function()
-            actions.close(prompt_bufnr)
-            local selection = action_state.get_selected_entry()
-            if selection and selection[1] then
-              local filename = selection[1]:gsub("%d+: ", "")
-              vim.cmd("edit " .. vim.fn.fnameescape(filename))
-            end
-          end)
-          return true
-        end,
-      })
-      :find()
-  else
-    vim.ui.select(choices, { prompt = title }, function(choice)
-      if choice then
-        local filename = choice:gsub("%d+: ", "")
-        vim.cmd("edit " .. vim.fn.fnameescape(filename))
-      end
-    end)
-  end
-end
-
 --- Resolve a target using handlers in order.
 --- @param context BladeNavContext
 --- @return boolean
@@ -301,7 +250,7 @@ function M.resolve_target(context)
     log.debug("Handler '%s' matched target: %s", name, vim.inspect(result))
 
     if result.choices and #result.choices > 0 then
-      M.show_choices("Select " .. (result.type or "target"), result.choices)
+      choice.select_file("Select " .. (result.type or "target"), result.choices)
       return true
     end
 

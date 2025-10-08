@@ -19,6 +19,7 @@ local TARGET_LISTS = {
     "route",
     "to_route",
     "view",
+    "__",
   },
   directive = {
     "@component",

@@ -122,3 +122,54 @@ describe("fs.find_files", function()
     fs.command_exists = real_command_exists
   end)
 end)
+
+describe("fs.project_relative", function()
+  local real_get_root_dir
+
+  before_each(function()
+    real_get_root_dir = fs.get_root_dir
+  end)
+
+  after_each(function()
+    fs.get_root_dir = real_get_root_dir
+  end)
+
+  it("returns a relative path when inside the project root", function()
+    fs.get_root_dir = function()
+      return "/tmp/myproject"
+    end
+
+    local path = "/tmp/myproject/resources/lang/en.json"
+    local result = fs.project_relative(path)
+    assert.are.equal("resources/lang/en.json", result)
+  end)
+
+  it("returns an absolute path when outside the project root", function()
+    fs.get_root_dir = function()
+      return "/tmp/myproject"
+    end
+
+    local result = fs.project_relative("/tmp/some-random-file.txt")
+    -- macOS resolves /tmp to /private/tmp, so support both
+    assert(
+      result == "/tmp/some-random-file.txt" or result == "/private/tmp/some-random-file.txt",
+      string.format("Unexpected path: %s", result)
+    )
+  end)
+
+  it("handles empty or nil input gracefully", function()
+    assert.are.equal("", fs.project_relative(""))
+    assert.is_nil(fs.project_relative(nil))
+  end)
+
+  it("uses fs.get_root_dir when available", function()
+    local called = false
+    fs.get_root_dir = function()
+      called = true
+      return "/tmp/myproject"
+    end
+
+    fs.project_relative("/tmp/myproject/resources/lang/es/messages.php")
+    assert.is_true(called)
+  end)
+end)

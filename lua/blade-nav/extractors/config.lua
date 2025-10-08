@@ -1,3 +1,5 @@
+-- /lua/blade-nav/extractors/config.lua
+
 local uv = vim.loop
 local ts = vim.treesitter
 local fs = require("blade-nav.utils.fs")
