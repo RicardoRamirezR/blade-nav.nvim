@@ -33,6 +33,7 @@ https://github.com/user-attachments/assets/1b0aa688-93fe-4d87-b6ee-a6dbb96391ed
     *   Supports Laravel configuration: Navigate from `config('app.key')` calls to the specific key within `config/app.php`.
     *   Supports Laravel environment variables: Navigate from `env('VAR_NAME')` calls.
     *   Supports navigation to imported Vue components within `.vue` files using `gf`.
+    *   Supports navigation to localization files in __() calls.
     *   Falls back to standard Neovim `gf` behavior for unrecognized patterns.
 *   **Autocompletion Integrations**:
     *   Provides smart completion items for Blade/Laravel constructs within `nvim-cmp`, `blink.cmp`, and `coq.nvim`.
@@ -48,8 +49,10 @@ https://github.com/user-attachments/assets/1b0aa688-93fe-4d87-b6ee-a6dbb96391ed
 *   **Display values as signature information**:
     *   Displays the config value in a floating window. 
     *   Displays the .env value in a floating window. 
+    *   Displays the localizations values in a floating window. 
 *   **Display values as virtual text**:
     *   Displays all config/.env key values as virtual text.
+    *   Displays localizations for __() as virtual text.
 *   **Vue Inertia Page Detection**:
     *   Identify and potentially navigate to Vue pages used within Inertia.js setups by parsing the page resolver configuration (e.g., in `app.js`).
 *   **Flexible Configuration**:
