@@ -62,7 +62,7 @@ function M.setup()
   vim.api.nvim_create_autocmd("BufWinEnter", {
     group = vim.api.nvim_create_augroup("blade_nav_gf_integration", { clear = true }),
     callback = function(args)
-      local buf_ft = vim.api.nvim_buf_get_option(args.buf, "filetype")
+      local buf_ft = vim.api.nvim_get_option_value("filetype", { buf = args.buf })
       if buf_ft == "blade" or buf_ft == "php" or buf_ft == "vue" then
         pcall(vim.keymap.del, "n", "gf", { buffer = args.buf })
 

@@ -8,8 +8,15 @@ local env = require("blade-nav.extractors.env")
 
 local M = {}
 
-local env_map = env.get_map() or {}
+local env_map = nil
 local watcher = nil
+
+local function get_env_map()
+  if not env_map then
+    env_map = env.get_map() or {}
+  end
+  return env_map
+end
 
 --- Evaluate a PHP value node into a simplified representation.
 --- Supports: string, number, boolean, null, array, env('KEY', default).
@@ -69,7 +76,7 @@ local function eval_value(content, node)
             local key = ts.get_node_text(key_inner, content)
             key = key:gsub("^[\"']", ""):gsub("[\"']$", "")
 
-            local val = env_map[key]
+            local val = get_env_map()[key]
             if val and val ~= "" then
               return { kind = "env_ref", ref = key, text = val }
             elseif def_inner then
@@ -205,6 +212,7 @@ function M.get_map()
     watcher = uv.new_fs_event()
     watcher:start(config_dir, { recursive = true }, function()
       cache.clear(cache_key)
+      env_map = nil
     end)
   end
 

@@ -120,7 +120,7 @@ local function find_parent(node, predicate)
 end
 
 local function safe_get_node_at_cursor(bufnr)
-  local ft = vim.api.nvim_buf_get_option(bufnr, "filetype")
+  local ft = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
   if not ft or ft == "" then
     vim.notify("No filetype detected", vim.log.levels.WARN)
     return nil
@@ -904,32 +904,6 @@ function M.extract_directive(node, bufnr)
   return full_text, fname, first_arg
 end
 
-local debug = false
-
---- Debug printer (only prints if debug = true)
-local function dprint(text, fname, first_arg)
-  if not debug then
-    return
-  end
-  local pos = vim.api.nvim_win_get_cursor(0)
-  local line_num = pos[1]
-  local line_content = "[" .. vim.api.nvim_buf_get_lines(0, line_num - 1, line_num, false)[1] .. "]"
-  local cur_pos = "Cursor at row=" .. pos[1] .. " col=" .. pos[2] .. " -> " .. line_content .. " -> "
-
-  if fname then
-    if first_arg then
-      if type(first_arg) == "table" then
-        first_arg = table.concat(first_arg, ", ")
-      end
-      print(cur_pos .. "extracted: " .. text .. " -> " .. fname .. " -> " .. first_arg)
-    else
-      print(cur_pos .. "extracted: " .. text .. " -> " .. fname .. "")
-    end
-  else
-    print(cur_pos .. "extracted: " .. tostring(text))
-  end
-end
-
 --- Try to extract interesting text from the current cursor position.
 --- Order matters: PHP calls > Blade components/tags > Blade directives.
 function M.get_text_node()
@@ -941,26 +915,20 @@ function M.get_text_node()
 
   local text, fname, first_arg = M.extract_php(node, bufnr)
   if text then
-    dprint(text, fname, first_arg)
     return text, fname, first_arg
   end
 
   text, fname, first_arg = M.extract_component(bufnr)
   if text then
-    dprint(text, fname, first_arg)
     return text, fname, first_arg
   end
 
   text, fname, first_arg = M.extract_directive(node, bufnr)
   if text then
-    dprint(text, fname, first_arg)
     return text, fname, first_arg
   end
 
-  dprint("No se encontró texto relevante en la posición del cursor")
   return nil, nil, nil
 end
-
-M.get_text_node()
 
 return M

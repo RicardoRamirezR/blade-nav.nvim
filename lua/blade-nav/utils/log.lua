@@ -60,13 +60,12 @@ local function log_raw(level_str, message)
   end)
 end
 
-local table_unpack = table.unpack or unpack
+local table_unpack = table.unpack
 
 local function count_format_specifiers(fmt)
   local i = 1
   local len = #fmt
   local count = 0
-  -- conversion letters que queremos contar (ampliable)
   local conv_set = {
     d = true,
     i = true,
@@ -90,10 +89,10 @@ local function count_format_specifiers(fmt)
     if ch == "%" then
       local nextch = fmt:sub(i + 1, i + 1)
       if nextch == "%" then
-        -- "%%" -> literal %, saltarlo
+        -- "%%" -> literal %, skip
         i = i + 2
       else
-        -- avanzar hasta encontrar la letra de conversión (o salir)
+        -- advance to conversion letter
         local j = i + 1
         while j <= len do
           local letter = fmt:sub(j, j)
@@ -172,9 +171,6 @@ end
 --- @param msg string Format string
 --- @param ... any Arguments for format string
 function M.info(msg, ...)
-  if not config.get().debug then
-    return
-  end
 
   local formatted_msg
   if select("#", ...) > 0 then
@@ -191,9 +187,6 @@ end
 --- @param msg string Format string
 --- @param ... any Arguments for format string
 function M.warn(msg, ...)
-  if not config.get().debug then
-    return
-  end
 
   local formatted_msg
   if select("#", ...) > 0 then
@@ -210,9 +203,6 @@ end
 --- @param msg string Format string
 --- @param ... any Arguments for format string
 function M.error(msg, ...)
-  if not config.get().debug then
-    return
-  end
 
   local formatted_msg
   if select("#", ...) > 0 then

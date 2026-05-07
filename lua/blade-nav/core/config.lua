@@ -98,9 +98,6 @@ local function merge_config_with_legacy(user_opts)
         and (not user_opts.laravel_components_paths or vim.tbl_isempty(user_opts.laravel_components_paths))
     then
       merged_config.laravel_components_paths = vim.deepcopy(legacy_laravel_components)
-      if merged_config.debug then
-        print("[BladeNav Debug] Applied legacy global laravel_components_paths.")
-      end
     end
   end
 
@@ -133,12 +130,8 @@ end
 
 --- Get the current configuration.
 --- @param key? string Key to retrieve.
---- @param value? any Value to set.
---- @return BladeNavConfig|string
-function M.get(key, value)
-  if key and value then
-    cache.merged[key] = value
-  end
+--- @return BladeNavConfig|any
+function M.get(key)
   if key then
     return cache.merged[key]
   end
@@ -147,9 +140,7 @@ function M.get(key, value)
 end
 
 function M.set(key, value)
-  print("Set " .. key .. " to " .. value, cache.merged[key])
   cache.merged[key] = value
-  print("Set " .. key .. " to " .. value, cache.merged[key])
 end
 
 function M.disableDebug()

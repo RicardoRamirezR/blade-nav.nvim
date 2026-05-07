@@ -22,7 +22,7 @@ function source.new(opts)
 end
 
 function source:enabled()
-  local buf_ft = vim.api.nvim_buf_get_option(0, "filetype")
+  local buf_ft = vim.api.nvim_get_option_value("filetype", { buf = 0 })
   return buf_ft == "blade" or buf_ft == "php"
 end
 

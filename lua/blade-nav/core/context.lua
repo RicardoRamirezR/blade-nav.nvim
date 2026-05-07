@@ -18,7 +18,7 @@ function M.create()
 
   local context = {
     buffer = bufnr,
-    filetype = vim.api.nvim_buf_get_option(bufnr, "filetype"),
+    filetype = vim.api.nvim_get_option_value("filetype", { buf = bufnr }),
     line = line,
     first_arg = nil,
     target = nil,

@@ -13,8 +13,7 @@ local lang_extractor = require("blade-nav.extractors.lang")
 local log = require("blade-nav.utils.log")
 local textnode = require("blade-nav.core.textnode")
 
--- Compatibility for unpack
-local unpack = table.unpack or unpack
+local unpack = table.unpack
 
 local env_map_local = nil
 local cfg_map = nil
@@ -782,10 +781,10 @@ local function show_translations_for_key(key)
     return
   end
 
-  vim.api.nvim_buf_set_option(bufn, "modifiable", false)
-  vim.api.nvim_buf_set_option(bufn, "filetype", "markdown")
-  vim.api.nvim_buf_set_option(bufn, "buftype", "nofile")
-  vim.api.nvim_buf_set_option(bufn, "bufhidden", "wipe")
+  vim.bo[bufn].modifiable = false
+  vim.bo[bufn].filetype = "markdown"
+  vim.bo[bufn].buftype = "nofile"
+  vim.bo[bufn].bufhidden = "wipe"
 
   -- Close shortcuts
   vim.keymap.set("n", "q", "<cmd>close<CR>", { buffer = bufn, nowait = true, noremap = true, silent = true })

@@ -338,7 +338,7 @@ function M.gets_root_and_lang()
   end
 
   local bufnr = 0
-  local lang = ts.language.get_lang(vim.api.nvim_buf_get_option(bufnr, "filetype"))
+  local lang = ts.language.get_lang(vim.api.nvim_get_option_value("filetype", { buf = bufnr }))
   if not lang then
     log.warn("BladeNav Route (goto_method): Could not determine language for current buffer.")
     return nil, nil

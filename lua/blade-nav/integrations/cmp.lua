@@ -39,7 +39,7 @@ function M.setup(opts)
   end
 
   source.is_available = function()
-    local buf_ft = vim.api.nvim_buf_get_option(0, "filetype")
+    local buf_ft = vim.api.nvim_get_option_value("filetype", { buf = 0 })
     return tbl.contains({ "blade", "php" }, buf_ft)
   end
 
