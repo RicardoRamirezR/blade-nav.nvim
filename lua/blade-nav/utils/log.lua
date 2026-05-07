@@ -171,7 +171,6 @@ end
 --- @param msg string Format string
 --- @param ... any Arguments for format string
 function M.info(msg, ...)
-
   local formatted_msg
   if select("#", ...) > 0 then
     formatted_msg = string.format("[BladeNav Info] " .. msg, ...)
@@ -187,7 +186,6 @@ end
 --- @param msg string Format string
 --- @param ... any Arguments for format string
 function M.warn(msg, ...)
-
   local formatted_msg
   if select("#", ...) > 0 then
     formatted_msg = string.format("[BladeNav Warn] " .. msg, ...)
@@ -203,7 +201,6 @@ end
 --- @param msg string Format string
 --- @param ... any Arguments for format string
 function M.error(msg, ...)
-
   local formatted_msg
   if select("#", ...) > 0 then
     formatted_msg = string.format("[BladeNav Error] " .. msg, ...)
