@@ -1,5 +1,2 @@
-if not vim.g.loaded_blade_nav then
-  require("blade-nav").setup()
-end
-
-vim.g.loaded_blade_nav = true
+-- ftplugin/blade/blade-nav.lua
+require("blade-nav.loader").ftplugin_loader()
