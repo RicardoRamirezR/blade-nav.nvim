@@ -1,15 +1,10 @@
 -- lua/blade-nav/integrations/blink.lua
 
-local context_creator = require("blade-nav.core.context")
 local log = require("blade-nav.utils.log")
 
 local source = {}
 local registered = false
 
--- @class BladeNavBlinkSourceOpts
--- @field close_tag_on_complete boolean
-
--- @param opts table Configuration options passed from setup
 function source.new(opts)
   opts = opts or {}
   opts.close_tag_on_complete = opts.close_tag_on_complete ~= false
@@ -31,35 +26,36 @@ function source:get_trigger_characters()
 end
 
 function source:get_completions(ctx, callback)
-  local context = context_creator.create()
+  local laravel = require("blade-nav.utils.laravel")
+  local str = require("blade-nav.utils.string")
+
+  local line_before_cursor = ctx.line:sub(1, ctx.cursor[2])
+  local input_prefix = line_before_cursor:match("[^%s]*$") or ""
+
+  log.debug("Blink input prefix: '%s'", input_prefix)
+
+  local _, completion_items = laravel.get_view_names(input_prefix, not self.opts.close_tag_on_complete)
+  completion_items = completion_items or {}
+
   local items = {}
-  local view_names = { "layouts.app", "components.button", "user.profile", "admin.dashboard" }
-  for _, name in ipairs(view_names) do
-    table.insert(items, {
-      label = name,
-      filterText = name,
-      kind = "BladeNav",
-      kind_hl_group = "BlinkCmpKindBladeNav",
-    })
+  for _, item_data in ipairs(completion_items) do
+    if type(item_data) == "table" and item_data.label then
+      table.insert(items, {
+        label = item_data.label,
+        filterText = item_data.filterText or item_data.label,
+        insertText = item_data.newText or item_data.label,
+        kind = "BladeNav",
+        kind_hl_group = "BlinkCmpKindBladeNav",
+      })
+    end
   end
 
-  local route_names = { "home", "user.profile", "admin.dashboard" }
-  for _, name in ipairs(route_names) do
-    table.insert(items, {
-      label = name,
-      filterText = name,
-      kind = "BladeNav",
-      kind_hl_group = "BlinkCmpKindBladeNav",
-    })
-  end
-
+  log.debug("Blink returning %d items", #items)
   callback({ items = items, isIncomplete = false })
 end
 
 local M = {}
 
--- Setup the blink integration.
--- @param opts table Configuration options (specifically integrations.blink)
 function M.setup(opts)
   if registered or not opts.integrations.blink then
     log.debug("BladeNav blink setup skipped (already registered or disabled).")
@@ -69,7 +65,7 @@ function M.setup(opts)
 
   local has_blink, blink = pcall(require, "blink.cmp")
   if not has_blink then
-    log.warn("blink.cmp not found, skipping BladeNav blink source.")
+    log.debug("blink.cmp not found, skipping BladeNav blink source.")
     return
   end
 

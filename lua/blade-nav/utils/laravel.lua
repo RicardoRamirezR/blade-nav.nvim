@@ -76,6 +76,13 @@ local function find_inertia()
   return all
 end
 
+--- Find all translation keys
+--- @return table
+local function find_lang()
+  local lang_keys = require("blade-nav.extractors.lang")
+  return lang_keys.get_keys()
+end
+
 --- Find all config keys
 --- @return table
 local function find_config()
@@ -553,6 +560,7 @@ M.get_view_names = function(input, not_include_closing_tag)
     { pattern = "Config::get%("     , tpl = "Config::get('%s')"       , ft = "*"                , fn = find_config     },
     { pattern = "Config::set%("     , tpl = "Config::set('%s')"       , ft = "*"                , fn = find_config     },
     { pattern = "env%("             , tpl = "env('%s')"               , ft = { "blade" , "php" }, fn = find_env        },
+    { pattern = "__%("              , tpl = "__('%s')"                , ft = { "blade" , "php" }, fn = find_lang       },
   }
   -- stylua: ignore end
   local index
