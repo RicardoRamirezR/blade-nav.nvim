@@ -22,9 +22,6 @@ local utils = {
     if #path > 255 then
       return false
     end
-    if path:match("%.%.") then
-      return false
-    end
     return true
   end,
 

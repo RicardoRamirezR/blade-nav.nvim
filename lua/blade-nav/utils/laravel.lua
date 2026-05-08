@@ -55,7 +55,25 @@ local function find_views_names(path, extension, exclude_dirs)
 end
 
 local function find_inertia()
-  return find_views_names("resources/js/Pages", "vue")
+  local config = require("blade-nav.core.config")
+  local extensions = config.get("inertia_extensions") or { "vue", "tsx", "jsx", "ts" }
+  local pages_path = config.get("inertia_pages_path") or "Pages"
+
+  local base = "resources/js/" .. pages_path
+  local all = {}
+  local seen = {}
+
+  for _, ext in ipairs(extensions) do
+    local names = find_views_names(base, ext)
+    for _, name in ipairs(names) do
+      if not seen[name] then
+        seen[name] = true
+        table.insert(all, name)
+      end
+    end
+  end
+
+  return all
 end
 
 --- Find all config keys
