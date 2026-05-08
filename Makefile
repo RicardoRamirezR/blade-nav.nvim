@@ -4,8 +4,7 @@
 test:
 	@echo "Running tests..."
 	@nvim --headless -u tests/minimal_init.lua \
-		-c "PlenaryBustedDirectory lua/tests/ {minimal_init = 'tests/minimal_init.lua'}" \
-		-c "qa!"
+		-c "PlenaryBustedDirectory lua/tests/ {minimal_init = 'tests/minimal_init.lua'}"
 
 # For debug - shows more information
 debug-test:
