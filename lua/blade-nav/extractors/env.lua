@@ -160,8 +160,16 @@ function M.get_map()
   end
 
   if vim.tbl_isempty(map) then
-    for _, k in ipairs(M.get_keys() or {}) do
-      map[k] = map[k] or ""
+    local file = io.open(env_file, "r")
+    if file then
+      for line in file:lines() do
+        local key, val = line:match("^%s*([A-Z0-9_]+)%s*=%s*(.*)")
+        if key then
+          val = val:gsub("^%s*['\"]", ""):gsub("['\"]%s*$", ""):gsub("%s+$", "")
+          map[key] = val
+        end
+      end
+      file:close()
     end
   end
 

@@ -167,10 +167,13 @@ function M.debug(msg, ...)
   log_raw("DEBUG", formatted_msg)
 end
 
---- Log an info message.
+--- Log an info message (only when debug is enabled).
 --- @param msg string Format string
 --- @param ... any Arguments for format string
 function M.info(msg, ...)
+  if not config.get().debug then
+    return
+  end
   local formatted_msg
   if select("#", ...) > 0 then
     formatted_msg = string.format("[BladeNav Info] " .. msg, ...)
