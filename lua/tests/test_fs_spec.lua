@@ -1,6 +1,6 @@
 local cmd = require("blade-nav.utils.cmd")
 local fs = require("blade-nav.utils.fs")
-local uv = vim.loop
+local uv = vim.uv
 
 describe("fs.find_files", function()
   local tmpdir

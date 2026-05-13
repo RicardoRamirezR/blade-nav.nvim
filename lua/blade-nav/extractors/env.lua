@@ -1,6 +1,6 @@
 -- lua/blade-nav/extractors/env.lua
 
-local uv = vim.loop
+local uv = vim.uv
 
 local cache = require("blade-nav.utils.cache")
 local fs = require("blade-nav.utils.fs")

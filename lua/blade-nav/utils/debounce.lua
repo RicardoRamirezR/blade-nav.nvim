@@ -1,5 +1,5 @@
 -- lua/blade-nav/utils/debounce.lua
-local uv = vim.loop
+local uv = vim.uv
 
 local function debounce(fn, ms)
   local timer = nil

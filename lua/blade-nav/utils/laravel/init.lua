@@ -1,5 +1,5 @@
 -- lua/blade-nav/utils/laravel/init.lua
-local uv = vim.loop
+local uv = vim.uv
 
 local cache = require("blade-nav.utils.cache")
 local fs = require("blade-nav.utils.fs")

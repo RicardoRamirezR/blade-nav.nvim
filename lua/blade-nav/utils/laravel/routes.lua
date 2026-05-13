@@ -1,5 +1,5 @@
 -- lua/blade-nav/utils/laravel/routes.lua
-local uv = vim.loop
+local uv = vim.uv
 
 local cache = require("blade-nav.utils.cache")
 local cmd = require("blade-nav.utils.cmd")
@@ -44,7 +44,7 @@ local function watch_route_cache()
     if fname and fname:match("^routes%-v%d+%.php$") then
       vim.schedule(function()
         local file_path = "bootstrap/cache/" .. fname
-        local exists = vim.loop.fs_stat(file_path) ~= nil
+        local exists = vim.uv.fs_stat(file_path) ~= nil
         log.debug("Route cache file event: %s exists=%s events=%s", file_path, tostring(exists), events or "?")
 
         debounced_invalidate()

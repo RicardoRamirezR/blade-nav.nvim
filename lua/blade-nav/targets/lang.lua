@@ -44,13 +44,13 @@ local function get_available_locale_files()
   end
 
   local function scan_dir(dir)
-    local handle = vim.loop.fs_scandir(dir)
+    local handle = vim.uv.fs_scandir(dir)
     if not handle then
       return
     end
 
     while true do
-      local name, t = vim.loop.fs_scandir_next(handle)
+      local name, t = vim.uv.fs_scandir_next(handle)
       if not name then
         break
       end

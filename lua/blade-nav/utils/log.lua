@@ -60,7 +60,7 @@ local function log_raw(level_str, message)
   end)
 end
 
-local table_unpack = table.unpack
+local table_unpack = unpack
 
 local function count_format_specifiers(fmt)
   local i = 1

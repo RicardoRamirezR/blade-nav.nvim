@@ -1,6 +1,6 @@
 local M = {}
 
-local uv = vim.loop
+local uv = vim.uv
 local ts = vim.treesitter
 local log = require("blade-nav.utils.log")
 local values = require("blade-nav.features.annotations.values")

@@ -2,7 +2,7 @@
 
 local choice = require("blade-nav.utils.choice")
 local log = require("blade-nav.utils.log")
-local uv = vim.loop
+local uv = vim.uv
 
 local M = {}
 

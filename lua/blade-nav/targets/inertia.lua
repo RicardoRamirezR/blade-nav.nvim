@@ -9,7 +9,7 @@ local fs = require("blade-nav.utils.fs")
 local log = require("blade-nav.utils.log")
 local ts_utils = require("blade-nav.utils.treesitter")
 
-local uv = vim.loop
+local uv = vim.uv
 local M = {}
 
 local app_watcher = nil

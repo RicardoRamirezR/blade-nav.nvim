@@ -2,7 +2,7 @@ local lang = require("blade-nav.targets.lang")
 local fs = require("blade-nav.utils.fs")
 local choice = require("blade-nav.utils.choice")
 local log = require("blade-nav.utils.log")
-local uv = vim.loop
+local uv = vim.uv
 
 describe("blade-nav.targets.lang", function()
   local tmpdir

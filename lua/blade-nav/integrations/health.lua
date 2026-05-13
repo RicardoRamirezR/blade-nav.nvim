@@ -22,7 +22,7 @@ local function check_environment()
 
   local version = vim.version()
   ok(string.format("Neovim version: %d.%d.%d", version.major, version.minor, version.patch))
-  ok("Operating System: " .. vim.loop.os_uname().sysname)
+  ok("Operating System: " .. vim.uv.os_uname().sysname)
 
   if fs.command_exists("php") then
     local php_version = vim.fn.system("php --version"):match("^[^\n]+")
@@ -107,18 +107,18 @@ local function check_project_files()
     warn("Laravel heuristics failed: project may not be a Laravel app")
   end
 
-  if vim.loop.fs_stat(root_dir .. "/composer.json") then
+  if vim.uv.fs_stat(root_dir .. "/composer.json") then
     ok("composer.json found")
   else
     error("Missing composer.json")
   end
-  if vim.loop.fs_stat(root_dir .. "/resources/views") then
+  if vim.uv.fs_stat(root_dir .. "/resources/views") then
     ok("resources/views directory exists")
   else
     error("Missing resources/views directory")
   end
 
-  if vim.loop.fs_stat(root_dir .. "/vendor/composer/autoload_psr4.php") then
+  if vim.uv.fs_stat(root_dir .. "/vendor/composer/autoload_psr4.php") then
     ok("vendor/composer/autoload_psr4.php found")
   else
     error("Missing vendor/composer/autoload_psr4.php")
@@ -247,9 +247,9 @@ local function check_routes()
 
   cache.clear("route_list:route_name")
 
-  local start_time = vim.loop.hrtime()
+  local start_time = vim.uv.hrtime()
   local ok1, routes1 = pcall(laravel.get_route_names)
-  local elapsed1 = (vim.loop.hrtime() - start_time) / 1e6
+  local elapsed1 = (vim.uv.hrtime() - start_time) / 1e6
 
   if ok1 and routes1 and #routes1 > 0 then
     ok(string.format("Cold: %d routes in %.2f ms", #routes1, elapsed1))
@@ -257,9 +257,9 @@ local function check_routes()
     warn("Cold route load failed")
   end
 
-  local start_time2 = vim.loop.hrtime()
+  local start_time2 = vim.uv.hrtime()
   local ok2, routes2 = pcall(laravel.get_route_names)
-  local elapsed2 = (vim.loop.hrtime() - start_time2) / 1e6
+  local elapsed2 = (vim.uv.hrtime() - start_time2) / 1e6
 
   if ok2 and routes2 and #routes2 > 0 then
     ok(string.format("Warm: %d routes in %.2f ms (cache)", #routes2, elapsed2))
@@ -276,9 +276,9 @@ local function check_views()
 
   cache.clear("view_list")
 
-  local start_time = vim.loop.hrtime()
+  local start_time = vim.uv.hrtime()
   local ok1, views1 = pcall(laravel.__health_check_views)
-  local elapsed1 = (vim.loop.hrtime() - start_time) / 1e6
+  local elapsed1 = (vim.uv.hrtime() - start_time) / 1e6
 
   if ok1 and views1 and #views1 > 0 then
     ok(string.format("Cold: %d views in %.2f ms", #views1, elapsed1))
@@ -286,9 +286,9 @@ local function check_views()
     warn("Cold view load failed")
   end
 
-  local start_time2 = vim.loop.hrtime()
+  local start_time2 = vim.uv.hrtime()
   local ok2, views2 = pcall(laravel.__health_check_views)
-  local elapsed2 = (vim.loop.hrtime() - start_time2) / 1e6
+  local elapsed2 = (vim.uv.hrtime() - start_time2) / 1e6
 
   if ok2 and views2 and #views2 > 0 then
     ok(string.format("Warm: %d views in %.2f ms (cache)", #views2, elapsed2))

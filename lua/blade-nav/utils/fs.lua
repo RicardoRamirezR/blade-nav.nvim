@@ -1,5 +1,5 @@
 -- lua/blade-nav/utils/fs.lua
-local uv = vim.loop
+local uv = vim.uv
 local cmd = require("blade-nav.utils.cmd")
 local log = require("blade-nav.utils.log")
 local cache = require("blade-nav.utils.cache")
@@ -174,7 +174,7 @@ function M.project_relative(path)
     return path
   end
 
-  local root = M.get_root_dir and M.get_root_dir() or vim.loop.cwd()
+  local root = M.get_root_dir and M.get_root_dir() or vim.uv.cwd()
   local abs = vim.fn.fnamemodify(vim.fn.resolve(path), ":p")
   local normalized_root = vim.fs.normalize(vim.fn.fnamemodify(vim.fn.resolve(root), ":p"))
 
