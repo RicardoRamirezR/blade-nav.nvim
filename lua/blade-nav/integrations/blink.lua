@@ -1,40 +1,36 @@
 -- lua/blade-nav/integrations/blink.lua
+-- blink.cmp v1 provider module
+-- Usage: sources.providers = { ["blade-nav"] = { name = "blade-nav", module = "blade-nav.integrations.blink" } }
 
 local log = require("blade-nav.utils.log")
 
-local source = {}
-local registered = false
+local Source = {}
 
-function source.new(opts)
-  opts = opts or {}
-  opts.close_tag_on_complete = opts.close_tag_on_complete ~= false
-
+function Source.new()
   vim.api.nvim_set_hl(0, "BlinkCmpKindBladeNav", { fg = "#f53003" })
-
-  local self = setmetatable({}, { __index = source })
-  self.opts = opts
-  return self
+  return setmetatable({}, { __index = Source })
 end
 
-function source:enabled()
-  local buf_ft = vim.api.nvim_get_option_value("filetype", { buf = 0 })
-  return buf_ft == "blade" or buf_ft == "php"
+function Source:enabled()
+  local ft = vim.api.nvim_get_option_value("filetype", { buf = 0 })
+  return ft == "blade" or ft == "php"
 end
 
-function source:get_trigger_characters()
+function Source:get_trigger_characters()
   return { ".", "<", ":", "@", "(", "'", '"' }
 end
 
-function source:get_completions(ctx, callback)
+---@param ctx blink.cmp.Context
+---@param callback fun(result?: blink.cmp.CompletionResponse)
+function Source:get_completions(ctx, callback)
   local laravel = require("blade-nav.utils.laravel")
-  local str = require("blade-nav.utils.string")
 
   local line_before_cursor = ctx.line:sub(1, ctx.cursor[2])
   local input_prefix = line_before_cursor:match("[^%s]*$") or ""
 
   log.debug("Blink input prefix: '%s'", input_prefix)
 
-  local _, completion_items = laravel.get_view_names(input_prefix, not self.opts.close_tag_on_complete)
+  local _, completion_items = laravel.get_view_names(input_prefix, false)
   completion_items = completion_items or {}
 
   local items = {}
@@ -44,33 +40,13 @@ function source:get_completions(ctx, callback)
         label = item_data.label,
         filterText = item_data.filterText or item_data.label,
         insertText = item_data.newText or item_data.label,
-        kind = "BladeNav",
-        kind_hl_group = "BlinkCmpKindBladeNav",
+        kind = require("blink.cmp.types").CompletionItemKind.Reference,
       })
     end
   end
 
   log.debug("Blink returning %d items", #items)
-  callback({ items = items, isIncomplete = false })
+  callback({ is_incomplete_forward = false, is_incomplete_backward = false, items = items })
 end
 
-local M = {}
-
-function M.setup(opts)
-  if registered or not opts.integrations.blink then
-    log.debug("BladeNav blink setup skipped (already registered or disabled).")
-    return
-  end
-  registered = true
-
-  local has_blink, blink = pcall(require, "blink.cmp")
-  if not has_blink then
-    log.debug("blink.cmp not found, skipping BladeNav blink source.")
-    return
-  end
-
-  blink.register_source("blade-nav", source.new(opts))
-  log.info("BladeNav blink.cmp source registered.")
-end
-
-return M
+return Source

@@ -88,23 +88,21 @@ Requires `nvim-treesitter` with `php` and `html` parsers.
 ```lua
 {
     'ricardoramirezr/blade-nav.nvim',
-    dependencies = { -- all optional
+    dependencies = { -- optional, for nvim-cmp integration
         'hrsh7th/nvim-cmp',
-        { 'ms-jpq/coq_nvim', branch = 'coq' },
-        'saghen/blink.cmp',
     },
     ft = { 'blade', 'php' },
     opts = {},
 }
 ```
 
+For blink.cmp users, no dependency is needed. See [blink.cmp configuration](#blinkcmp) below.
+
 ### vim-plug
 
 ```vim
 call plug#begin()
     Plug 'hrsh7th/nvim-cmp'                      " optional
-    Plug 'ms-jpq/coq_nvim', { 'branch': 'coq' }  " optional
-    Plug 'saghen/blink.cmp'                      " optional
     Plug 'ricardoramirezr/blade-nav.nvim', { 'for': ['blade', 'php'] }
 call plug#end()
 lua require("blade-nav").setup()
@@ -116,9 +114,7 @@ lua require("blade-nav").setup()
 use {
     'ricardoramirezr/blade-nav.nvim',
     requires = {
-        'hrsh7th/nvim-cmp',
-        { 'ms-jpq/coq_nvim', branch = 'coq' },
-        'saghen/blink.cmp',
+        'hrsh7th/nvim-cmp', -- optional
     },
     ft = { 'blade', 'php' },
     config = function()
@@ -225,6 +221,24 @@ require('cmp').setup({
 
 ### blink.cmp
 
+Register blade-nav as a source provider in your blink.cmp config:
+
+```lua
+require('blink.cmp').setup({
+    sources = {
+        default = { 'lsp', 'blade-nav', 'snippets', 'path', 'buffer' },
+        providers = {
+            ['blade-nav'] = {
+                name = 'blade-nav',
+                module = 'blade-nav.integrations.blink',
+            },
+        },
+    },
+})
+```
+
+To customize the icon:
+
 ```lua
 completion = {
     menu = {
@@ -232,14 +246,13 @@ completion = {
             components = {
                 kind_icon = {
                     text = function(ctx)
-                        local icon = ctx.kind_icon
-                        if ctx.source_name == 'Blade-nav' then
-                            icon = ''
+                        if ctx.source_name == 'blade-nav' then
+                            return ' '
                         end
-                        return ' ' .. icon .. ctx.icon_gap .. ' '
+                        return ctx.kind_icon
                     end,
                     highlight = function(ctx)
-                        if ctx.source_name == 'Blade-nav' then
+                        if ctx.source_name == 'blade-nav' then
                             return 'BlinkCmpKindBladeNav'
                         end
                         return 'BlinkCmpKind' .. ctx.kind
