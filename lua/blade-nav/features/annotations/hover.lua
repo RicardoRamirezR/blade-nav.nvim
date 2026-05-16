@@ -2,7 +2,7 @@ local M = {}
 
 local uv = vim.loop
 local ts = vim.treesitter
-local unpack = table.unpack
+local unpack = table.unpack or unpack
 local log = require("blade-nav.utils.log")
 local textnode = require("blade-nav.core.textnode")
 local lang_extractor = require("blade-nav.extractors.lang")
