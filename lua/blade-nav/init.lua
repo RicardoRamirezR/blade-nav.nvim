@@ -38,10 +38,6 @@ function M.setup(opts)
     require("blade-nav.integrations.cmp").setup(user_config)
   end
 
-  if user_config.integrations.blink ~= false then
-    require("blade-nav.integrations.blink").setup(user_config)
-  end
-
   if user_config.integrations.coq ~= false then
     require("blade-nav.integrations.coq").setup()
   end
