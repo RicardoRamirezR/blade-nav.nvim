@@ -1,6 +1,7 @@
 -- lua/blade-nav/core/textnode.lua
 
 local log = require("blade-nav.utils.log")
+local unpack = table.unpack or unpack ---@diagnostic disable-line: deprecated
 
 local M = {}
 local ts = vim.treesitter

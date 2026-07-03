@@ -1,5 +1,6 @@
 -- lua/blade-nav/utils/debounce.lua
 local uv = vim.uv
+local unpack = table.unpack or unpack ---@diagnostic disable-line: deprecated
 
 local function debounce(fn, ms)
   local timer = nil
