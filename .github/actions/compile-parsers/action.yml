@@ -11,30 +11,32 @@ runs:
         mkdir -p ~/.local/share/nvim/site/parser
 
         echo "→ Compiling HTML parser..."
-        git clone --depth=1 https://github.com/tree-sitter/tree-sitter-html /tmp/tree-sitter-html
+        git clone --depth=1 --branch v0.23.2 https://github.com/tree-sitter/tree-sitter-html /tmp/tree-sitter-html
         cd /tmp/tree-sitter-html
         tree-sitter generate
         gcc -o ~/.local/share/nvim/site/parser/html.so -shared src/parser.c src/scanner.c -I./src -fPIC -O2
 
         echo "→ Compiling PHP parser..."
-        git clone --depth=1 https://github.com/tree-sitter/tree-sitter-php /tmp/tree-sitter-php
+        git clone --depth=1 --branch v0.24.2 https://github.com/tree-sitter/tree-sitter-php /tmp/tree-sitter-php
         cd /tmp/tree-sitter-php/php
         tree-sitter generate
         gcc -o ~/.local/share/nvim/site/parser/php.so -shared src/parser.c src/scanner.c -I./src -fPIC -O2
 
         echo "→ Compiling Blade parser..."
-        git clone --depth=1 https://github.com/EmranMR/tree-sitter-blade /tmp/tree-sitter-blade
+        git clone --depth=1 --branch v0.12.3 https://github.com/EmranMR/tree-sitter-blade /tmp/tree-sitter-blade
         cd /tmp/tree-sitter-blade
         tree-sitter generate
         if [ -f "src/scanner.c" ]; then
           gcc -o ~/.local/share/nvim/site/parser/blade.so -shared src/parser.c src/scanner.c -I./src -fPIC -O2
         else
-          gcc -o ~/.local/share/nvim/site/parser/blade.so -shared src/parser.c src/scanner.c src/external_scanner.c -I./src -fPIC -O2 2>/dev/null || \
-          gcc -o ~/.local/share/nvim/site/parser/blade.so -shared src/parser.c src/scanner.c -I./src -fPIC -O2
+          gcc -o ~/.local/share/nvim/site/parser/blade.so -shared src/parser.c -I./src -fPIC -O2
         fi
 
         echo "→ Compiling Vue parser..."
-        git clone --depth=1 https://github.com/tree-sitter-grammars/tree-sitter-vue /tmp/tree-sitter-vue
+        git init -q /tmp/tree-sitter-vue
+        git -C /tmp/tree-sitter-vue remote add origin https://github.com/tree-sitter-grammars/tree-sitter-vue
+        git -C /tmp/tree-sitter-vue fetch --depth=1 origin ce8011a414fdf8091f4e4071752efc376f4afb08
+        git -C /tmp/tree-sitter-vue checkout FETCH_HEAD
         cd /tmp/tree-sitter-vue
         mkdir -p node_modules/tree-sitter-html
         cp -r /tmp/tree-sitter-html/grammar.js node_modules/tree-sitter-html/ 2>/dev/null || echo "HTML grammar.js not found, continuing..."
@@ -42,4 +44,3 @@ runs:
         gcc -o ~/.local/share/nvim/site/parser/vue.so -shared src/scanner.c src/parser.c -I./src -fPIC -O2
 
         echo "✓ All parsers compiled successfully"
-

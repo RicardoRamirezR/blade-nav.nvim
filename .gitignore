@@ -6,6 +6,12 @@
 # OS
 .DS_Store
 
+# PHP CS Fixer cache
+.php-cs-fixer.cache
+
+# Generated vimdoc tags
+doc/tags
+
 # Compiled Lua sources
 luac.out
 

@@ -81,7 +81,7 @@ For `__()` and `trans()` calls, `K` opens a floating window showing the translat
 
 ## Installation
 
-Requires `nvim-treesitter` with `php` and `html` parsers.
+Requires Neovim >= 0.11 and `nvim-treesitter` with `php` and `html` parsers.
 
 ### lazy.nvim
 
@@ -138,7 +138,7 @@ require('blade-nav').setup({
     cache_timeout = 50000,            -- Cache TTL in ms
     debug = false,
 
-    -- Completion behavior
+    -- Completion behavior (applies to nvim-cmp, blink.cmp, and coq.nvim)
     close_tag_on_complete = true,
     include_routes_in_cmp = true,
 
@@ -162,15 +162,14 @@ require('blade-nav').setup({
         component = true,
         inertia   = true,
         vue       = true,
+        lang      = true,
     },
 
     -- Completion/integration sources
     integrations = {
-        gf     = true,
-        cmp    = true,
-        blink  = true,
-        coq    = true,
-        health = true,
+        gf  = true,
+        cmp = true,
+        coq = true,
     },
 
     -- Inline value annotations
