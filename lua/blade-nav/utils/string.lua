@@ -1,5 +1,6 @@
 -- lua/blade-nav/utils/string.lua
 local tbl = require("blade-nav.utils.table")
+local config = require("blade-nav.core.config")
 local M = {}
 
 --- Explode string to table by delimiter.
@@ -75,7 +76,7 @@ function M.get_keyword_pattern()
     "Inertia::render",
   }
 
-  if vim.g.blade_nav and vim.g.blade_nav.include_routes_in_cmp == false then
+  if config.get("include_routes_in_cmp") == false then
     functions_keywords = vim.tbl_filter(function(keyword)
       return not tbl.contains({ "route", "to_route" }, keyword)
     end, functions_keywords)

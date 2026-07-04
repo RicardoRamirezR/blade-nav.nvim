@@ -4,6 +4,7 @@ local log = require("blade-nav.utils.log")
 local tbl = require("blade-nav.utils.table")
 local laravel = require("blade-nav.utils.laravel")
 local str = require("blade-nav.utils.string")
+local config = require("blade-nav.core.config")
 
 local M = {}
 local registered = false
@@ -18,7 +19,7 @@ function M.setup(opts)
   end
 
   opts = opts or {}
-  local close_tag_on_complete = opts.close_tag_on_complete ~= false
+  local opts_close_tag_on_complete = opts.close_tag_on_complete ~= false
 
   local has_cmp, cmp = pcall(require, "cmp")
   if not has_cmp or not cmp then
@@ -60,6 +61,11 @@ function M.setup(opts)
     input_prefix = input_prefix:gsub("^%s+", ""):gsub("%s+$", "")
 
     log.debug("Input prefix extracted: '%s' (from line: '%s', offset: %d)", input_prefix, line_before_cursor, offset_1b)
+
+    local close_tag_on_complete = config.get("close_tag_on_complete")
+    if close_tag_on_complete == nil then
+      close_tag_on_complete = opts_close_tag_on_complete
+    end
 
     local completion_items = laravel.items_for_prefix(
       input_prefix,

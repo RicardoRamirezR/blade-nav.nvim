@@ -10,6 +10,7 @@
 local helpers = require("tests.helpers")
 local fs = require("blade-nav.utils.fs")
 local cache = require("blade-nav.utils.cache")
+local config_module = require("blade-nav.core.config")
 
 describe("integrations.cmp source.complete", function()
   local fixtures_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h") .. "/fixtures"
@@ -78,6 +79,8 @@ describe("integrations.cmp source.complete", function()
   end)
 
   it("returns @include('welcome') with a full closing tag by default", function()
+    config_module.setup({ close_tag_on_complete = true })
+
     helpers.with_buffer({ "    @include('" }, { filetype = "blade" }, function()
       local source = setup_cmp_source({ close_tag_on_complete = true })
       assert.is_not_nil(source, "expected cmp.register_source to have captured the blade-nav source")
@@ -100,6 +103,8 @@ describe("integrations.cmp source.complete", function()
   end)
 
   it("omits the closing tag when close_tag_on_complete = false", function()
+    config_module.setup({ close_tag_on_complete = false })
+
     helpers.with_buffer({ "    @include('" }, { filetype = "blade" }, function()
       local source = setup_cmp_source({ close_tag_on_complete = false })
       assert.is_not_nil(source)
@@ -117,9 +122,13 @@ describe("integrations.cmp source.complete", function()
       -- Label is stable; newText drops the trailing "')" when close_tag_on_complete=false.
       assert.equals("@include('welcome", found.textEdit.newText)
     end)
+
+    config_module.setup({ close_tag_on_complete = true })
   end)
 
   it("returns component items for the <x- prefix", function()
+    config_module.setup({ close_tag_on_complete = true })
+
     helpers.with_buffer({ "    <x-" }, { filetype = "blade" }, function()
       local source = setup_cmp_source({ close_tag_on_complete = true })
 
