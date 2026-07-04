@@ -209,6 +209,9 @@ function M.get_map()
   cache.set(cache_key, map)
 
   if not watcher then
+    -- `recursive = true` is unsupported by libuv's inotify backend on Linux
+    -- (silently ignored there, so only the top-level dir is watched); the
+    -- cache TTL is the fallback that eventually picks up nested changes.
     watcher = uv.new_fs_event()
     watcher:start(config_dir, { recursive = true }, function()
       cache.clear(cache_key)

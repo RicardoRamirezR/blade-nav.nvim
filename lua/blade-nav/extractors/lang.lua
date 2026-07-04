@@ -9,6 +9,36 @@ local M = {}
 
 local watcher = nil
 
+--- Resolve the translations directory: Laravel 9+ moved it to a root-level
+--- `lang/`, falling back to the legacy `resources/lang/` otherwise.
+--- @param root string
+--- @return string
+local function resolve_lang_dir(root)
+  local modern_dir = fs.normalize_path(root .. "/lang")
+  if fs.is_dir(modern_dir) then
+    return modern_dir
+  end
+  return fs.normalize_path(root .. "/resources/lang")
+end
+
+--- Shared fs watcher: a single watcher on the lang dir clears BOTH map
+--- caches, regardless of which one (get_map/get_map_all_locales) primed it
+--- first.
+--- @param lang_dir string
+local function ensure_watcher(lang_dir)
+  if watcher then
+    return
+  end
+  -- `recursive = true` is unsupported by libuv's inotify backend on Linux
+  -- (silently ignored there, so only the top-level dir is watched); the
+  -- cache TTL is the fallback that eventually picks up nested changes.
+  watcher = uv.new_fs_event()
+  watcher:start(lang_dir, { recursive = true }, function()
+    cache.clear("lang_translations_map")
+    cache.clear("lang_translations_map_all_locales")
+  end)
+end
+
 --- Remove UTF-8 BOM from beginning of text if present
 local function strip_bom(text)
   if not text or #text < 3 then
@@ -134,7 +164,7 @@ function M.get_map()
   end
 
   local root = fs.get_root_dir()
-  local lang_dir = fs.normalize_path(root .. "/resources/lang")
+  local lang_dir = resolve_lang_dir(root)
 
   if not fs.is_dir(lang_dir) then
     return {}
@@ -170,8 +200,8 @@ function M.get_map()
 
     if t == "directory" then
       table.insert(locales, name)
-    elseif name:match("^(%a+)%.json$") then
-      local locale = name:match("^(%a+)%.json$")
+    elseif name:match("^([%a_%-]+)%.json$") then
+      local locale = name:match("^([%a_%-]+)%.json$")
       if not vim.tbl_contains(locales, locale) then
         table.insert(locales, locale)
       end
@@ -229,14 +259,7 @@ function M.get_map()
   end
 
   cache.set(cache_key, map)
-
-  -- Watch for changes
-  if not watcher then
-    watcher = uv.new_fs_event()
-    watcher:start(lang_dir, { recursive = true }, function()
-      cache.clear(cache_key)
-    end)
-  end
+  ensure_watcher(lang_dir)
 
   return map
 end
@@ -258,7 +281,7 @@ function M.get_map_all_locales()
   end
 
   local root = fs.get_root_dir()
-  local lang_dir = fs.normalize_path(root .. "/resources/lang")
+  local lang_dir = resolve_lang_dir(root)
   if not fs.is_dir(lang_dir) then
     return {}
   end
@@ -278,8 +301,8 @@ function M.get_map_all_locales()
     end
     if t == "directory" then
       table.insert(locales, name)
-    elseif name:match("^(%a+)%.json$") then
-      local locale = name:match("^(%a+)%.json$")
+    elseif name:match("^([%a_%-]+)%.json$") then
+      local locale = name:match("^([%a_%-]+)%.json$")
       if not vim.tbl_contains(locales, locale) then
         table.insert(locales, locale)
       end
@@ -320,14 +343,7 @@ function M.get_map_all_locales()
   end
 
   cache.set(cache_key, maps)
-
-  if not watcher then
-    watcher = uv.new_fs_event()
-    watcher:start(lang_dir, { recursive = true }, function()
-      cache.clear(cache_key)
-      cache.clear("lang_translations_map") -- keep other cache in sync
-    end)
-  end
+  ensure_watcher(lang_dir)
 
   return maps
 end

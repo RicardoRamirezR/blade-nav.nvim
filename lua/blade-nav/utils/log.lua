@@ -4,6 +4,29 @@ local config = require("blade-nav.core.config")
 
 local M = {}
 
+-- Cache of source file lines, keyed by path (debug-only perf: avoids
+-- re-reading the same source file from disk on every debug log call).
+local file_lines_cache = {}
+
+local function get_file_lines(source_file)
+  local cached = file_lines_cache[source_file]
+  if cached then
+    return cached
+  end
+
+  local lines = {}
+  local file = io.open(source_file, "r")
+  if file then
+    for line in file:lines() do
+      table.insert(lines, line)
+    end
+    file:close()
+  end
+
+  file_lines_cache[source_file] = lines
+  return lines
+end
+
 local function extract_function_name(info)
   if info.name then
     return info.name
@@ -13,33 +36,26 @@ local function extract_function_name(info)
   if source_file:sub(1, 1) == "@" then
     source_file = source_file:sub(2)
 
-    local file = io.open(source_file, "r")
-    if file then
-      local line_num = 1
-      for line in file:lines() do
-        if line_num == info.linedefined then
-          local patterns = {
-            "function%s+([%w_%.]+)%s*%(",
-            "function%s+([%w_]+):([%w_]+)%s*%(",
-            "([%w_]+)%s*=%s*function%s*%(",
-            "([%w_%.]+)%.([%w_]+)%s*=%s*function%s*%(",
-          }
+    local lines = get_file_lines(source_file)
+    local line = lines[info.linedefined]
+    if line then
+      local patterns = {
+        "function%s+([%w_%.]+)%s*%(",
+        "function%s+([%w_]+):([%w_]+)%s*%(",
+        "([%w_]+)%s*=%s*function%s*%(",
+        "([%w_%.]+)%.([%w_]+)%s*=%s*function%s*%(",
+      }
 
-          for _, pattern in ipairs(patterns) do
-            local match1, match2 = line:match(pattern)
-            if match1 then
-              if match2 then
-                return match1 .. ":" .. match2
-              else
-                return match1:match("([^%.]+)$") or match1
-              end
-            end
+      for _, pattern in ipairs(patterns) do
+        local match1, match2 = line:match(pattern)
+        if match1 then
+          if match2 then
+            return match1 .. ":" .. match2
+          else
+            return match1:match("([^%.]+)$") or match1
           end
-          break
         end
-        line_num = line_num + 1
       end
-      file:close()
     end
   end
 
@@ -60,7 +76,7 @@ local function log_raw(level_str, message)
   end)
 end
 
-local table_unpack = unpack
+local table_unpack = table.unpack or unpack
 
 local function count_format_specifiers(fmt)
   local i = 1

@@ -27,7 +27,7 @@ class BladeNav extends Command
     public function handle()
     {
         $aliases = Container::getInstance()->make('blade.compiler')->getClassComponentAliases();
-        $psr4s = require('./vendor/composer/autoload_psr4.php');
+        $psr4s = require base_path('vendor/composer/autoload_psr4.php');
         $components = [];
         foreach ($psr4s as $class => $dirs) {
             foreach ($aliases as $name => $alias) {

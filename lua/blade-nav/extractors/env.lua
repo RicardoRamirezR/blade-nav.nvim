@@ -14,10 +14,20 @@ local function start_watcher(env_file)
   if watcher then
     return
   end
+  -- Watch the parent directory rather than the file itself: editors that
+  -- save atomically (write a temp file, then rename over the original)
+  -- replace the watched inode, silently detaching a direct file watch.
+  local dir = vim.fn.fnamemodify(env_file, ":h")
+  local env_basename = vim.fn.fnamemodify(env_file, ":t")
   watcher = uv.new_fs_event()
-  watcher:start(env_file, {}, function()
-    cache.clear("env_keys")
-    cache.clear("env_kv_map")
+  watcher:start(dir, {}, function(err, fname)
+    if err then
+      return
+    end
+    if fname == env_basename then
+      cache.clear("env_keys")
+      cache.clear("env_kv_map")
+    end
   end)
 end
 

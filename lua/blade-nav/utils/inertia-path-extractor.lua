@@ -1,39 +1,21 @@
 -- lua/blade-nav/inertia-path-extractor.lua
 -- Utility functions for path processing
 
-local utils = {
-  normalize_path = function(path)
-    if not path then
-      return nil
-    end
-    path = path:gsub("^%.?/?", "")
-    path = path:gsub("/?$", "")
-    path = path:gsub("//+", "/")
-    return path
-  end,
+local fs = require("blade-nav.utils.fs")
+local log = require("blade-nav.utils.log")
 
-  validate_path = function(path)
-    if not path then
-      return false
-    end
-    if path:match('[<>:"|?*]') then
-      return false
-    end
-    if #path > 255 then
-      return false
-    end
-    return true
-  end,
-
-  log = function(msg, level)
-    level = level or "info"
-    if vim and vim.notify then
-      vim.notify(msg, vim.log.levels[level:upper()])
-    else
-      print(string.format("[%s] %s", level:upper(), msg))
-    end
-  end,
-}
+local function validate_path(path)
+  if not path then
+    return false
+  end
+  if path:match('[<>:"|?*]') then
+    return false
+  end
+  if #path > 255 then
+    return false
+  end
+  return true
+end
 
 -- Custom error handling
 local ErrorTypes = {
@@ -64,49 +46,49 @@ local function extract_pages_path(file_content, opts)
     {
       pattern = "resolvePageComponent%s*%(%s*[`'\"](.-)/%${name}%.vue[`'\"]",
       process = function(match)
-        return utils.normalize_path(match)
+        return fs.clean_relative_path(match)
       end,
       name = "Laravel 11 resolvePageComponent",
     },
     {
       pattern = "pages%s*=%s*import%.meta%.glob%([`'\"](.-)/[*][*]/[*]%.vue[`'\"]%s*,%s*{%s*eager:%s*true%s*}",
       process = function(match)
-        return utils.normalize_path(match)
+        return fs.clean_relative_path(match)
       end,
       name = "Vite eager glob",
     },
     {
       pattern = "pages%s*=%s*import%.meta%.glob%([`'\"](.-)/[*][*]/[*]%.vue[`'\"]",
       process = function(match)
-        return utils.normalize_path(match)
+        return fs.clean_relative_path(match)
       end,
       name = "Vite standard glob",
     },
     {
-      pattern = "[`'\"]%./?(.-?)/%${name}%.vue[`'\"]",
+      pattern = "[`'\"]%./?(.-)/%${name}%.vue[`'\"]",
       process = function(match)
-        return utils.normalize_path(match)
+        return fs.clean_relative_path(match)
       end,
       name = "Direct string path",
     },
     {
       pattern = "require%([`'\"]%./(.-)/[^`'\"]+[`'\"]%)",
       process = function(match)
-        return utils.normalize_path(match)
+        return fs.clean_relative_path(match)
       end,
       name = "Webpack require",
     },
     {
-      pattern = "import%(([`'\"]%.?/.-)/[^`'\"]+[`'\"]%)",
+      pattern = "import%([`'\"](%.?/.-)/[^`'\"]+[`'\"]%)",
       process = function(match)
-        return utils.normalize_path(match)
+        return fs.clean_relative_path(match)
       end,
       name = "Dynamic import",
     },
     {
       pattern = "definePages%(%s*[`'\"](.-)/%${name}%.vue[`'\"]",
       process = function(match)
-        return utils.normalize_path(match)
+        return fs.clean_relative_path(match)
       end,
       name = "definePages",
     },
@@ -117,7 +99,7 @@ local function extract_pages_path(file_content, opts)
       local match = file_content:match(pattern_config.pattern)
       if match then
         if debug then
-          utils.log(string.format("Match found with pattern: %s", pattern_config.name), "debug")
+          log.debug("Match found with pattern: %s", pattern_config.name)
         end
         return pattern_config.process(match)
       end
@@ -126,13 +108,13 @@ local function extract_pages_path(file_content, opts)
 
     if not success then
       if debug then
-        utils.log(string.format("Error processing pattern %s: %s", pattern_config.name, result), "error")
+        log.error("Error processing pattern %s: %s", pattern_config.name, result)
       end
       if strict then
         return nil, throw_error(ErrorTypes.PARSE_ERROR, result)
       end
     elseif result then
-      if not utils.validate_path(result) then
+      if not validate_path(result) then
         return nil, throw_error(ErrorTypes.INVALID_PATH, "Invalid characters or unsafe path detected")
       end
       return result
@@ -230,25 +212,19 @@ local function test_extract_pages_path()
 
     if passed then
       results.passed = results.passed + 1
-      utils.log(string.format("✓ %s: passed", test_case.name), "info")
+      log.info("%s: passed", test_case.name)
     else
       results.failed = results.failed + 1
-      utils.log(
-        string.format(
-          "✗ %s: failed (expected: %s, got: %s)",
-          test_case.name,
-          test_case.expected or test_case.expected_error,
-          result or (error and error.type) or "nil"
-        ),
-        "error"
+      log.error(
+        "%s: failed (expected: %s, got: %s)",
+        test_case.name,
+        test_case.expected or test_case.expected_error,
+        result or (error and error.type) or "nil"
       )
     end
   end
 
-  utils.log(
-    string.format("\nTest Results: %d/%d passed (%d failed)", results.passed, results.total, results.failed),
-    "info"
-  )
+  log.info("Test Results: %d/%d passed (%d failed)", results.passed, results.total, results.failed)
 end
 
 return {

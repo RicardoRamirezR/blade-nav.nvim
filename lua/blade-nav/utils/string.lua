@@ -8,26 +8,26 @@ local M = {}
 --- @param text string
 --- @return table
 function M.explode(delimiter, text)
-  local result = {}
   if not text or text == "" then
-    return result
+    return {}
   end
-  local pattern = string.format("([^%s]+)", delimiter:gsub("([^%w])", "%%%1"))
-  for match in string.gmatch(text, pattern) do
-    table.insert(result, match)
-  end
-  return result
+  return vim.split(text, delimiter, { plain = true, trimempty = true })
 end
 
---- Convert kebab-case to PascalCase.
+--- Convert kebab-case to PascalCase, pascal-casing each dot segment
+--- independently (e.g. "admin.user-list" -> "Admin.UserList").
 --- @param input string
 --- @return string
 function M.kebab_to_pascal(input)
   if not input then
     return ""
   end
-  local result = input:gsub("^%l", string.upper):gsub("%-(%w)", string.upper)
-  return result
+
+  local segments = {}
+  for segment in (input .. "."):gmatch("([^.]*)%.") do
+    table.insert(segments, (segment:gsub("^%l", string.upper):gsub("%-(%w)", string.upper)))
+  end
+  return table.concat(segments, ".")
 end
 
 --- Determine prefix and suffix for a component/directive.
@@ -76,7 +76,7 @@ function M.get_keyword_pattern()
     "Inertia::render",
   }
 
-  if vim.g.blade_nav and vim.g.blade_nav.include_routes == false then
+  if vim.g.blade_nav and vim.g.blade_nav.include_routes_in_cmp == false then
     functions_keywords = vim.tbl_filter(function(keyword)
       return not tbl.contains({ "route", "to_route" }, keyword)
     end, functions_keywords)

@@ -7,10 +7,6 @@ local log = require("blade-nav.utils.log")
 
 local M = {}
 
-local function escape_lua_pattern(s)
-  return (s:gsub("([^%w])", "%%%1"))
-end
-
 --- Find all views names
 --- @param path string
 --- @param extension? string
@@ -19,7 +15,7 @@ end
 local function find_views_names(path, extension, exclude_dirs)
   extension = extension or "blade.php"
 
-  local cache_key = "find_view_names:" .. path .. ":" .. extension
+  local cache_key = "find_view_names:" .. path .. ":" .. extension .. ":" .. table.concat(exclude_dirs or {}, ",")
   local cached = cache.get(cache_key)
   if cached then
     return cached
@@ -31,10 +27,10 @@ local function find_views_names(path, extension, exclude_dirs)
   end
 
   local views = {}
-  local ext_pattern = "%." .. escape_lua_pattern(extension) .. "$"
+  local ext_pattern = "%." .. vim.pesc(extension) .. "$"
 
   for _, filename in ipairs(result) do
-    local view = filename:match(path .. "(.+)")
+    local view = filename:match(vim.pesc(path) .. "(.+)")
     if view then
       view = view:gsub("^/", ""):gsub(ext_pattern, ""):gsub("/", ".")
       table.insert(views, view)
@@ -111,38 +107,39 @@ local function find_views()
   return find_views_names("resources/views", nil, { "resources/views/livewire", "resources/views/components" })
 end
 
+-- stylua: ignore start
+local PATTERNS = {
+  { pattern = "to_route%("        , tpl = "to_route('%s')"          , ft = { "blade" , "php" }, fn = find_routes     , kind = "route"     },
+  { pattern = "route%("           , tpl = "route('%s')"             , ft = { "blade" , "php" }, fn = find_routes     , kind = "route"     },
+  { pattern = "<x%-"              , tpl = "<x-%s />"                , ft = { "blade" }        , fn = find_components , kind = "component" },
+  { pattern = "<livewire"         , tpl = "<livewire:%s />"         , ft = { "blade" }        , fn = find_livewire   , kind = "livewire"  },
+  { pattern = "@component%("      , tpl = "@component('%s')"        , ft = { "blade" }        , fn = find_views      , kind = "view"      },
+  { pattern = "@extends%("        , tpl = "@extends('%s')"          , ft = { "blade" }        , fn = find_views      , kind = "view"      },
+  { pattern = "@include%("        , tpl = "@include('%s')"          , ft = { "blade" }        , fn = find_views      , kind = "view"      },
+  { pattern = "@livewire%("       , tpl = "@livewire('%s')"         , ft = { "blade" }        , fn = find_livewire   , kind = "livewire"  },
+  { pattern = "Route::view%("     , tpl = "Route::view('uri', '%s')", ft = { "php" }          , fn = find_views      , kind = "view"      },
+  { pattern = "View::make%("      , tpl = "View::make('%s')"        , ft = { "php" }          , fn = find_views      , kind = "view"      },
+  { pattern = "view%("            , tpl = "view('%s')"              , ft = { "php" }          , fn = find_views      , kind = "view"      },
+  { pattern = "inertia%("         , tpl = "inertia('%s')"           , ft = { "php" }          , fn = find_inertia    , kind = "inertia"   },
+  { pattern = "Inertia::render%(" , tpl = "Inertia::render('%s')"   , ft = { "php" }          , fn = find_inertia    , kind = "inertia"   },
+  { pattern = "config%("          , tpl = "config('%s')"            , ft = "*"                , fn = find_config     , kind = "config"    },
+  { pattern = "Config::get%("     , tpl = "Config::get('%s')"       , ft = "*"                , fn = find_config     , kind = "config"    },
+  { pattern = "Config::set%("     , tpl = "Config::set('%s')"       , ft = "*"                , fn = find_config     , kind = "config"    },
+  { pattern = "env%("             , tpl = "env('%s')"               , ft = { "blade" , "php" }, fn = find_env        , kind = "env"       },
+  { pattern = "__%("              , tpl = "__('%s')"                , ft = { "blade" , "php" }, fn = find_lang       , kind = "lang"      },
+  { pattern = "trans%("            , tpl = "trans('%s')"              , ft = { "blade" , "php" }, fn = find_lang       , kind = "lang"      },
+}
+-- stylua: ignore end
+
 --- Get all view names
 --- @param input string
 --- @param not_include_closing_tag? boolean
---- @return number|nil, table
+--- @return number|nil, table, string|nil
 M.get_view_names = function(input, not_include_closing_tag)
-  -- stylua: ignore start
-  local patterns = {
-    { pattern = "to_route%("        , tpl = "to_route('%s')"          , ft = { "blade" , "php" }, fn = find_routes     },
-    { pattern = "route%("           , tpl = "route('%s')"             , ft = { "blade" , "php" }, fn = find_routes     },
-    { pattern = "<x%-"              , tpl = "<x-%s />"                , ft = { "blade" }        , fn = find_components },
-    { pattern = "<livewire"         , tpl = "<livewire:%s />"         , ft = { "blade" }        , fn = find_livewire   },
-    { pattern = "@component%("      , tpl = "@component('%s')"        , ft = { "blade" }        , fn = find_views      },
-    { pattern = "@extends%("        , tpl = "@extends('%s')"          , ft = { "blade" }        , fn = find_views      },
-    { pattern = "@include%("        , tpl = "@include('%s')"          , ft = { "blade" }        , fn = find_views      },
-    { pattern = "@livewire%("       , tpl = "@livewire('%s')"         , ft = { "blade" }        , fn = find_livewire   },
-    { pattern = "Route::view%("     , tpl = "Route::view('uri', '%s')", ft = { "php" }          , fn = find_views      },
-    { pattern = "View::make%("      , tpl = "View::make('%s')"        , ft = { "php" }          , fn = find_views      },
-    { pattern = "view%("            , tpl = "view('%s')"              , ft = { "php" }          , fn = find_views      },
-    { pattern = "inertia%("         , tpl = "inertia('%s')"           , ft = { "php" }          , fn = find_inertia    },
-    { pattern = "Inertia::render%(" , tpl = "Inertia::render('%s')"   , ft = { "php" }          , fn = find_inertia    },
-    { pattern = "config%("          , tpl = "config('%s')"            , ft = "*"                , fn = find_config     },
-    { pattern = "Config::get%("     , tpl = "Config::get('%s')"       , ft = "*"                , fn = find_config     },
-    { pattern = "Config::set%("     , tpl = "Config::set('%s')"       , ft = "*"                , fn = find_config     },
-    { pattern = "env%("             , tpl = "env('%s')"               , ft = { "blade" , "php" }, fn = find_env        },
-    { pattern = "__%("              , tpl = "__('%s')"                , ft = { "blade" , "php" }, fn = find_lang       },
-    { pattern = "trans%("            , tpl = "trans('%s')"              , ft = { "blade" , "php" }, fn = find_lang       },
-  }
-  -- stylua: ignore end
   local index
   local items = {}
   log.debug("get_view_names called with input: %s", input)
-  for i, p in ipairs(patterns) do
+  for i, p in ipairs(PATTERNS) do
     if input:match(p.pattern) and (p.ft == "*" or vim.tbl_contains(p.ft, vim.bo.filetype)) then
       local names = p.fn()
       for _, name in ipairs(names) do
@@ -162,7 +159,33 @@ M.get_view_names = function(input, not_include_closing_tag)
       break
     end
   end
-  return index, items
+  return index, items, index and PATTERNS[index].kind
+end
+
+--- Compute canonical completion items for the text before the cursor.
+--- Shared helper used by cmp/blink/coq integrations.
+--- @param line_before_cursor string
+--- @return { label: string, new_text: string, kind: string }[]|nil
+function M.items_for_prefix(line_before_cursor)
+  if not line_before_cursor or line_before_cursor == "" then
+    return nil
+  end
+
+  local input_prefix = line_before_cursor:match("%S*$") or ""
+  local index, entries, kind = M.get_view_names(input_prefix)
+  if not index or not entries or #entries == 0 then
+    return nil
+  end
+
+  local items = {}
+  for _, entry in ipairs(entries) do
+    table.insert(items, {
+      label = entry.label,
+      new_text = entry.newText,
+      kind = kind or "blade-nav",
+    })
+  end
+  return items
 end
 
 M.__health_check_views = find_views

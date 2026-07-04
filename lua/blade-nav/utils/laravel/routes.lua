@@ -12,6 +12,10 @@ local M = {}
 local route_cache_watcher = nil
 local routes_watcher = nil
 
+-- Lowered bound for synchronous route:list calls (caller needs an immediate
+-- result); the background re-prime path runs fully async instead.
+local SYNC_TIMEOUT_MS = 2000
+
 function M.invalidate_routes_cache()
   log.debug("Invalidating all cached routes")
   cache.clear_prefix("route_list:")
@@ -43,7 +47,7 @@ local function watch_route_cache()
 
     if fname and fname:match("^routes%-v%d+%.php$") then
       vim.schedule(function()
-        local file_path = "bootstrap/cache/" .. fname
+        local file_path = root .. "/bootstrap/cache/" .. fname
         local exists = vim.uv.fs_stat(file_path) ~= nil
         log.debug("Route cache file event: %s exists=%s events=%s", file_path, tostring(exists), events or "?")
 
@@ -109,27 +113,40 @@ local function build_route_map(routes)
   return map
 end
 
-local function prime_routes(routes)
-  local root = fs.get_root_dir()
-  local all_out, ok_all = cmd.execute_silent({
-    "php",
-    "artisan",
-    "route:list",
-    "--json",
-    "--columns=name,action",
-  }, { cwd = root })
-
+local function apply_primed_routes(output, ok)
   local primed_map = {}
-  if ok_all then
-    local ok_parse, all_routes = pcall(vim.json.decode, all_out)
+  if ok then
+    local ok_parse, all_routes = pcall(vim.json.decode, output)
     if ok_parse and type(all_routes) == "table" then
       primed_map = build_route_map(all_routes)
       cache.set("route_list:primed", primed_map)
       log.debug("Primed cache with %d routes", vim.tbl_count(primed_map))
     end
   end
-
   return primed_map
+end
+
+--- Prime the whole-route-list cache.
+--- @param async? boolean When true, run via vim.system's callback (no blocking wait).
+--- @return table Primed route map (empty table when async, since the result arrives later).
+local function prime_routes(async)
+  -- Ensure invalidation watchers are running regardless of which code path
+  -- primed the cache first (get_route_list(name) already starts these too).
+  watch_routes_dir()
+  watch_route_cache()
+
+  local root = fs.get_root_dir()
+  local args = { "php", "artisan", "route:list", "--json", "--columns=name,action" }
+
+  if async then
+    cmd.execute_async(args, { cwd = root }, function(output, ok)
+      apply_primed_routes(output, ok)
+    end)
+    return {}
+  end
+
+  local all_out, ok_all = cmd.execute_silent(args, { cwd = root, timeout = SYNC_TIMEOUT_MS })
+  return apply_primed_routes(all_out, ok_all)
 end
 
 function M.get_route_list(route_name)
@@ -166,7 +183,7 @@ function M.get_route_list(route_name)
     "--name=" .. route_name,
     "--json",
     "--columns=name,action",
-  }, { cwd = root })
+  }, { cwd = root, timeout = SYNC_TIMEOUT_MS })
   if not ok then
     log.debug("Root: " .. root)
     log.warn("Failed to execute 'php artisan route:list --json'. Output: %s", output or "nil")
@@ -182,7 +199,7 @@ function M.get_route_list(route_name)
 
   vim.schedule(function()
     log.debug("Priming global route cache in background...")
-    prime_routes()
+    prime_routes(true)
   end)
 
   return route_map

@@ -10,12 +10,7 @@ function M.contains(tbl, value)
     tbl = { tbl }
   end
 
-  for _, v in ipairs(tbl) do
-    if v == value then
-      return true
-    end
-  end
-  return false
+  return vim.tbl_contains(tbl, value)
 end
 
 return M

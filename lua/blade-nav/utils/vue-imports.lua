@@ -1,13 +1,17 @@
 -- lua/blade-nav/utils/vue-imports.lua
 local config = require("blade-nav.core.config")
-local cache = require("blade-nav.utils.cache")
 local log = require("blade-nav.utils.log")
 local fs = require("blade-nav.utils.fs")
 
 local ts = vim.treesitter
 local api = vim.api
 local fn = vim.fn
---
+
+-- Module-local caches (not the shared utils/cache.lua module: these keys are
+-- ad-hoc and would pollute/collide with that module's namespace).
+local imports_cache = {}
+local jsconfig_cache = nil
+
 -- Query definitions with proper documentation
 local QUERIES = {
   -- Matches Vue script setup blocks
@@ -43,6 +47,7 @@ local cached_queries = setmetatable({}, {
 ---@return table imports Table of imports
 local function parse_javascript_content(content)
   local imports = {}
+  local current_name = nil
 
   local js_parser = ts.get_string_parser(content, "javascript")
   if not js_parser then
@@ -58,10 +63,10 @@ local function parse_javascript_content(content)
     local text = ts.get_node_text(js_node, content)
 
     if js_name == "name" then
-      imports.current_name = text
-    elseif js_name == "source" and imports.current_name then
-      imports[imports.current_name] = text:gsub("[\"']", "")
-      imports.current_name = nil
+      current_name = text
+    elseif js_name == "source" and current_name then
+      imports[current_name] = text:gsub("[\"']", "")
+      current_name = nil
     end
   end
 
@@ -116,9 +121,10 @@ end
 local function analyze_imports(bufnr)
   bufnr = bufnr or api.nvim_get_current_buf()
 
-  local cache_key = tostring(bufnr)
-  if cache.imports[cache_key] then
-    return cache.imports[cache_key].data
+  local changedtick = api.nvim_buf_get_changedtick(bufnr)
+  local cache_key = bufnr .. ":" .. changedtick
+  if imports_cache[cache_key] then
+    return imports_cache[cache_key].data
   end
 
   local parser = ts.get_parser(bufnr, "vue")
@@ -139,9 +145,9 @@ local function analyze_imports(bufnr)
     end
   end
 
-  cache.imports[cache_key] = {
+  imports_cache[cache_key] = {
     data = imports,
-    timestamp = now,
+    timestamp = vim.uv.now(),
   }
 
   return imports
@@ -150,8 +156,8 @@ end
 ---Read and parse jsconfig.json
 ---@return table|nil config Parsed jsconfig or nil if failed
 local function read_jsconfig()
-  if cache.jsconfig then
-    return cache.jsconfig
+  if jsconfig_cache then
+    return jsconfig_cache
   end
 
   log.debug("Reading jsconfig:", vim.inspect(config.get("jsconfig_path")))
@@ -166,7 +172,7 @@ local function read_jsconfig()
     return nil
   end
 
-  cache.jsconfig = parsed
+  jsconfig_cache = parsed
   return parsed
 end
 
@@ -194,10 +200,6 @@ end
 ---@param line text Line of text of the current expresion
 ---@return string|nil path Resolved path or nil if not found
 function M.resolve_path_for(line)
-  if not cache.imports then
-    cache.imports = {}
-  end
-
   local tag_name = M.get_tag_name_for(line)
   if not tag_name then
     log.debug("No tag found under cursor")

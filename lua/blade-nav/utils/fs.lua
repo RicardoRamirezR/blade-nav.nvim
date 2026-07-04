@@ -25,7 +25,7 @@ function M.get_root_dir()
     root_dir = vim.fn.getcwd()
   end
 
-  return cache.set(cache_key, root_dir), ok
+  return cache.set(cache_key, root_dir)
 end
 
 --- Safely read a file.
@@ -120,49 +120,47 @@ end
 --- @param exclude_dirs? string[]
 --- @return string[]|nil
 function M.find_files(path, extension, exclude_dirs)
-  local tool, cmd_template, exclude_fmt
+  local argv
 
   if M.command_exists("fd") then
-    tool = "fd"
-    cmd_template = "fd --type=file --extension %s . %s %s"
-    exclude_fmt = "-E %s"
-  else
-    tool = "find"
-    cmd_template = "find %s -type f -name '*.%s' %s"
-    exclude_fmt = "-not -path '%s/*'"
-  end
-
-  local exclude_cmd = ""
-  if exclude_dirs and #exclude_dirs > 0 then
-    local exclude_parts = {}
-    for _, dir in ipairs(exclude_dirs) do
-      if tool == "fd" then
-        table.insert(exclude_parts, string.format(exclude_fmt, dir))
-      else
-        -- For find, we need to use the full path pattern
-        table.insert(exclude_parts, string.format(exclude_fmt, path .. "/" .. dir))
+    argv = { "fd", "--type=file", "--extension", extension, ".", path }
+    if exclude_dirs then
+      for _, dir in ipairs(exclude_dirs) do
+        table.insert(argv, "-E")
+        table.insert(argv, dir)
       end
     end
-    exclude_cmd = table.concat(exclude_parts, " ")
-  end
-
-  local command
-  if tool == "fd" then
-    command = string.format(cmd_template, extension, path, exclude_cmd)
   else
-    command = string.format(cmd_template, path, extension, exclude_cmd)
+    argv = { "find", path, "-type", "f", "-name", "*." .. extension }
+    if exclude_dirs then
+      for _, dir in ipairs(exclude_dirs) do
+        table.insert(argv, "-not")
+        table.insert(argv, "-path")
+        table.insert(argv, path .. "/" .. dir .. "/*")
+      end
+    end
   end
-
-  -- Clean up extra spaces
-  command = command:gsub("%s+", " "):gsub("%s$", "")
 
   local root = M.get_root_dir()
-  local output, ok = cmd.execute_silent({ "sh", "-c", command }, { cwd = root })
+  local output, ok = cmd.execute_silent(argv, { cwd = root })
   if not ok then
     return nil
   end
 
   return vim.split(output, "\n", { trimempty = true })
+end
+
+--- Strip a leading "./", trailing "/", and collapse "//" in a relative path fragment.
+--- @param path string|nil
+--- @return string|nil
+function M.clean_relative_path(path)
+  if not path then
+    return nil
+  end
+  local result = path:gsub("^%.?/?", "")
+  result = result:gsub("/?$", "")
+  result = result:gsub("//+", "/")
+  return result
 end
 
 --- Get a path relative to the project root (if inside it).

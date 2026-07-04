@@ -14,10 +14,6 @@ local VIEW_DIRS = {
   "resources/views/",
 }
 
-local function escape_lua_pattern(s)
-  return (s:gsub("([^%w])", "%%%1"))
-end
-
 --- Get PSR-4 mappings from composer.json.
 --- @return table<string, string>|nil Map of namespace to path, or nil on error
 function M.get_psr4_mappings()
@@ -79,7 +75,7 @@ function M.get_blade_files()
     local result = fs.find_files(view_dir, "blade.php")
     if result then
       for _, file in ipairs(result) do
-        local relative_path = file:match(view_dir .. "(.*)%.blade%.php$")
+        local relative_path = file:match(vim.pesc(view_dir) .. "(.*)%.blade%.php$")
         if relative_path then
           local normalized_name = relative_path:gsub("/", ".")
           table.insert(files, normalized_name)
@@ -106,7 +102,7 @@ function M.get_component_paths(component_identifier, custom_search_paths)
   end
 
   local base_name = component_identifier:match("^([^.]+)") or component_identifier
-  local sub_path = component_identifier:gsub("^" .. escape_lua_pattern(base_name), ""):gsub("^%.", "/")
+  local sub_path = component_identifier:gsub("^" .. vim.pesc(base_name), ""):gsub("^%.", "/")
   local studly_case_name = base_name:gsub("%-([%w])", string.upper):gsub("^%l", string.upper)
 
   local class_file_path = "app/View/Components/" .. studly_case_name .. sub_path .. ".php"
@@ -220,11 +216,7 @@ end
 --- @param input string
 --- @return string
 function M.kebab_to_pascal(input)
-  if not input then
-    return ""
-  end
-  local result = input:gsub("^%l", string.upper):gsub("%-(%w)", string.upper)
-  return result
+  return require("blade-nav.utils.string").kebab_to_pascal(input)
 end
 
 --- Detect if current working directory looks like a Laravel project.
