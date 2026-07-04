@@ -1,0 +1,378 @@
+*blade-nav.txt*                                                  BladeNav.nvim
+Laravel-aware navigation, completion, and inline value annotations for Neovim.
+
+==============================================================================
+Contents                                                  *blade-nav-contents*
+
+    1. Introduction ................................. |blade-nav-introduction|
+    2. Requirements ................................. |blade-nav-requirements|
+    3. Setup ............................................... |blade-nav-setup|
+    4. Configuration ............................... |blade-nav-configuration|
+    5. Laravel detection ....................... |blade-nav-laravel-detection|
+    6. Navigation (gf) ................................ |blade-nav-navigation|
+    7. Annotations (inline values) ................... |blade-nav-annotations|
+    8. Hover (K) ........................................... |blade-nav-hover|
+    9. Commands ......................................... |blade-nav-commands|
+    10. Health ............................................ |blade-nav-health|
+    11. About .............................................. |blade-nav-about|
+
+==============================================================================
+1. Introduction                                       *blade-nav-introduction*
+
+                                                                   *blade-nav*
+BladeNav.nvim adds Laravel-aware navigation, completion, and inline value
+annotations to Neovim. Jump between controllers, routes, config files, Blade
+views, components, Inertia pages, and localization files with `gf`. See
+resolved config, env, and translation values as virtual text or via `K`. Get
+completions for Laravel constructs through nvim-cmp, blink.cmp, or coq.nvim.
+
+==============================================================================
+2. Requirements                                       *blade-nav-requirements*
+
+- Neovim >= 0.11.
+- nvim-treesitter with the `php`, `blade`, `vue`, and `html` parsers installed
+(checked by `:checkhealth blade-nav`).
+- A Laravel project, auto-detected (see |blade-nav-laravel-detection|), or
+`force_enable = true` to skip detection.
+- Optional: `php` and `artisan` on PATH, used by
+`:BladeNavInstallArtisanCommand` and related health checks.
+- Optional: one of nvim-cmp, blink.cmp, or coq.nvim for completion (only the
+engines enabled in `integrations` are used).
+
+==============================================================================
+3. Setup                                                     *blade-nav-setup*
+
+BladeNav needs no setup call to work with its defaults: it lazy-loads itself
+the first time a `blade`, `php`, or `vue` buffer is opened, calling `setup()`
+if it hasn't run yet and the project passes Laravel detection
+(|blade-nav-laravel-detection|).
+
+Call `setup()` yourself (e.g. from your plugin manager's `opts` or `config`)
+to pass custom options:
+
+>
+    require('blade-nav').setup({
+      -- your options here, see |blade-nav-configuration|
+    })
+<
+
+==============================================================================
+4. Configuration                                     *blade-nav-configuration*
+
+Every option below is type-checked against its declared type; a mismatch
+prints a `vim.notify` warning naming the offending key and the expected type,
+without stopping `setup()`.
+
+Top-level options ~
+
+enable                                                      *blade-nav.enable*
+        Type: boolean    Default: true
+
+        Master on/off switch. Auto-disabled outside a Laravel project unless
+        `force_enable` is `true`.
+
+force_enable                                          *blade-nav.force_enable*
+        Type: boolean    Default: false
+
+        Skip Laravel-project auto-detection (|blade-nav-laravel-detection|)
+        and force the plugin on.
+
+cache_timeout                                        *blade-nav.cache_timeout*
+        Type: number    Default: 50000
+
+        Cache time-to-live, in milliseconds, for cached routes, views, config,
+        and translation lookups.
+
+debug                                                        *blade-nav.debug*
+        Type: boolean    Default: false
+
+        Print verbose debug/info logging (visible in `:messages`).
+
+jsconfig_path                                        *blade-nav.jsconfig_path*
+        Type: string    Default: "./jsconfig.json"
+
+        Path to `jsconfig.json`, used to resolve Vue import aliases.
+
+close_tag_on_complete                        *blade-nav.close_tag_on_complete*
+        Type: boolean    Default: true
+
+        Automatically close `<x-component>` tags after completion (nvim-cmp,
+        blink.cmp, coq.nvim).
+
+include_routes_in_cmp                        *blade-nav.include_routes_in_cmp*
+        Type: boolean    Default: true
+
+        Include Laravel route names among completion results.
+
+inertia_pages_path                              *blade-nav.inertia_pages_path*
+        Type: string|nil    Default: nil
+
+        Override the Inertia pages directory. `nil` resolves to "Pages".
+
+inertia_extensions                              *blade-nav.inertia_extensions*
+        Type: table    Default: { "vue", "tsx", "jsx", "ts" }
+
+        File extensions tried, in order, when resolving Inertia page
+        components.
+
+laravel_components_paths                  *blade-nav.laravel_components_paths*
+        Type: table    Default: {}
+
+        Extra directories searched when resolving `<x-component>` tags.
+
+handlers                                                  *blade-nav.handlers*
+        Type: table<string, boolean>
+
+        Enable or disable individual `gf`/completion target handlers
+        (|blade-nav-navigation|):
+
+directive                                       *blade-nav.handlers.directive*
+        Type: boolean    Default: true
+
+        `@include`, `@extends`, `@component`, `@each`, and related directives.
+
+view                                                 *blade-nav.handlers.view*
+        Type: boolean    Default: true
+
+        `view()`, `View::make()`, `Route::view()`.
+
+livewire                                         *blade-nav.handlers.livewire*
+        Type: boolean    Default: true
+
+        `<livewire:name />`, `@livewire('name')`.
+
+route                                               *blade-nav.handlers.route*
+        Type: boolean    Default: true
+
+        `route('name')`, `to_route('name')`.
+
+config                                             *blade-nav.handlers.config*
+        Type: boolean    Default: true
+
+        `config('key')`, `env('KEY')`, `Config::get()`, `Config::set()`.
+
+component                                       *blade-nav.handlers.component*
+        Type: boolean    Default: true
+
+        `<x-button />`, `<x-input.date />`.
+
+inertia                                           *blade-nav.handlers.inertia*
+        Type: boolean    Default: true
+
+        `inertia('Page/Name')`, `Inertia::render('Page/Name')`.
+
+vue                                                   *blade-nav.handlers.vue*
+        Type: boolean    Default: true
+
+        `<MyComponent />`, resolved from `<script>` imports.
+
+lang                                                 *blade-nav.handlers.lang*
+        Type: boolean    Default: true
+
+        `__('key')`, `trans('key')`.
+
+integrations                                          *blade-nav.integrations*
+        Type: table<string, boolean>
+
+        Enable or disable per-engine integrations:
+
+gf                                                 *blade-nav.integrations.gf*
+        Type: boolean    Default: true
+
+        Enhanced `gf` navigation (|blade-nav-navigation|).
+
+cmp                                               *blade-nav.integrations.cmp*
+        Type: boolean    Default: true
+
+        nvim-cmp completion source.
+
+coq                                               *blade-nav.integrations.coq*
+        Type: boolean    Default: true
+
+        coq.nvim completion source.
+
+        blink.cmp is supported through a separate provider module
+        (`blade-nav.integrations.blink`) registered directly in your blink.cmp
+        config; it has no `integrations` flag of its own.
+
+annotations                                            *blade-nav.annotations*
+        Type: table
+
+        Inline value annotations, see |blade-nav-annotations| and
+        |blade-nav-hover|:
+
+show                                              *blade-nav.annotations.show*
+        Type: boolean    Default: false
+
+        Start with inline value annotations visible.
+
+hl                                                  *blade-nav.annotations.hl*
+        Type: string    Default: "Comment"
+
+        Highlight group used for the virtual text.
+
+prefix                                          *blade-nav.annotations.prefix*
+        Type: string    Default: " ⟶ "
+
+        Text inserted before each resolved value.
+
+max_len                                        *blade-nav.annotations.max_len*
+        Type: number    Default: 160
+
+        Maximum displayed length of a resolved value before truncation.
+
+debounce_ms                                *blade-nav.annotations.debounce_ms*
+        Type: number    Default: 120
+
+        Debounce interval, in milliseconds, for re-rendering annotations after
+        buffer changes.
+
+show_on_load                              *blade-nav.annotations.show_on_load*
+        Type: boolean    Default: true
+
+        Render annotations as soon as a matching buffer loads.
+
+create_keymaps                          *blade-nav.annotations.create_keymaps*
+        Type: boolean    Default: true
+
+        Create the `K`, `<leader>bv`, and `<leader>bcc` keymaps
+        (|blade-nav-annotations|).
+
+==============================================================================
+5. Laravel detection                             *blade-nav-laravel-detection*
+
+A project is auto-detected as Laravel if any of the following are true:
+
+- `artisan` exists at the project root.
+- `routes/web.php` exists.
+- `resources/views/` exists.
+- `composer.json` requires `laravel/framework` or `laravel/lumen-framework`.
+
+Set |blade-nav.force_enable| to `true` to skip detection and force the plugin
+on regardless.
+
+==============================================================================
+6. Navigation (gf)                                      *blade-nav-navigation*
+
+Position the cursor over a reference and press `gf`. BladeNav tries to resolve
+it first, gated by the matching |blade-nav.handlers| flag:
+
+    Blade directives (|blade-nav.handlers.directive|)
+        @include, @extends, @component, @each, @includeIf, @includeWhen,
+        @includeUnless, @includeFirst
+
+    Blade components (|blade-nav.handlers.component|)
+        <x-button />, <x-input.date />
+
+    Livewire (|blade-nav.handlers.livewire|)
+        <livewire:name />, @livewire('name')
+
+    Routes (|blade-nav.handlers.route|)
+        route('name'), to_route('name')
+
+    Views (|blade-nav.handlers.view|)
+        view('name'), View::make('name'), Route::view('url', 'name')
+
+    Inertia (|blade-nav.handlers.inertia|)
+        inertia('Page/Name'), Inertia::render('Page/Name')
+
+    Config / Environment (|blade-nav.handlers.config|)
+        config('app.key'), env('APP_KEY'), Config::get('key'),
+        Config::set('key')
+
+    Translations (|blade-nav.handlers.lang|)
+        __('messages.welcome'), trans('messages.welcome')
+
+    Vue imports (|blade-nav.handlers.vue|)
+        <MyComponent /> (resolved from <script> imports in .vue files)
+
+If no target is recognized or resolved, BladeNav falls back to your own global
+`gf` mapping (looked up at invocation time, so other plugins' `gf` mappings
+keep working), or Neovim's built-in `gf` otherwise. The mapping only applies
+to `blade`, `php`, and `vue` buffers, and is skipped where a buffer already
+has its own custom `gf` mapping.
+
+The same handlers back completion sources for nvim-cmp, blink.cmp, and
+coq.nvim (see |blade-nav.integrations|).
+
+==============================================================================
+7. Annotations (inline values)                         *blade-nav-annotations*
+
+Resolved values for `config()`, `env()`, `__()`, `trans()`, `Config::get()`,
+and `Config::set()` calls are displayed as virtual text next to each call,
+styled with |blade-nav.annotations.hl| and |blade-nav.annotations.prefix|.
+Applies to `php`, `blade`, `html`, `javascript`, and `vue` buffers.
+
+Keymaps (created when |blade-nav.annotations.create_keymaps| is `true`, the
+default):
+
+    K            Show the resolved value, see |blade-nav-hover|.
+    <leader>bv   Toggle annotations, same as |:BladeNavToggleShowValues|.
+    <leader>bcc  Clear caches, same as |:BladeNavClearCache|.
+
+==============================================================================
+8. Hover (K)                                                 *blade-nav-hover*
+
+Pressing `K` on a `config()`, `env()`, `__()`, `trans()`, `Config::get()`, or
+`Config::set()` call:
+
+- Requests `textDocument/hover` from any attached LSP client that advertises
+`hoverProvider`, and shows its response in a floating window.
+- Falls back to a floating window with BladeNav's own resolved value when no
+client responds with hover content.
+- For `__()`/`trans()` keys, shows the value across every detected locale in
+the floating window instead of a single value.
+
+When |blade-nav.annotations.show| is enabled, `K` also forces a synchronous
+re-render of the buffer's inline annotations, instead of the normal
+background-queued render.
+
+==============================================================================
+9. Commands                                               *blade-nav-commands*
+
+                                              *:BladeNavInstallArtisanCommand*
+:BladeNavInstallArtisanCommand
+        Copies the bundled BladeNav.php artisan command into
+        app/Console/Commands/BladeNav.php, rewriting its namespace to match
+        the project's PSR-4 "App\" mapping. Installs the
+        blade-nav:components-aliases artisan command, used to discover
+        component aliases registered by third-party packages.
+
+                                                         *:BladeNavClearCache*
+:BladeNavClearCache
+        Clears BladeNav's cached routes, views, config, env, and translation
+        lookups (|blade-nav.cache_timeout|).
+
+                                                   *:BladeNavToggleShowValues*
+:BladeNavToggleShowValues
+        Toggles the inline config/env/translation value annotations
+        (|blade-nav-annotations|) on or off for all open buffers.
+
+==============================================================================
+10. Health                                                  *blade-nav-health*
+
+Run `:checkhealth blade-nav` to check:
+
+- Environment: Neovim version, OS, PHP, and Artisan.
+- Tree-sitter: `php`, `blade`, `vue`, and `html` parsers installed.
+- External commands: `php`, `fd`, `find` availability.
+- Project structure: Laravel detection, composer.json, resources/views,
+vendor/composer/autoload_psr4.php.
+- BladeNav artisan command: whether it's installed and up to date.
+- Configuration: loaded options summary.
+- Integrations: enabled vs. available completion engines.
+- Routes and views: cold/warm cache timing.
+
+==============================================================================
+11. About                                                    *blade-nav-about*
+
+This reference covers configuration options and commands. For installation
+snippets (lazy.nvim, packer.nvim, vim-plug) and completion-engine
+customization recipes, see the project README at:
+
+    https://github.com/ricardoramirezr/blade-nav.nvim
+
+License: MIT.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

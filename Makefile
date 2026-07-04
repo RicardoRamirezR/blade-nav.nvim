@@ -1,4 +1,4 @@
-.PHONY: test debug-test lint
+.PHONY: test debug-test lint docs
 
 # Version with proper exit code handling
 test:
@@ -12,6 +12,10 @@ lint:
 	@stylua --check lua ftplugin scripts tests
 	@echo "Running luacheck..."
 	@luacheck lua ftplugin scripts tests
+
+# Regenerate doc/blade-nav.txt from scripts/gen_help.lua
+docs:
+	@nvim --headless -l scripts/gen_help.lua
 
 # For debug - shows more information
 debug-test:
