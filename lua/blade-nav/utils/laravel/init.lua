@@ -211,7 +211,7 @@ end
 function M.get_blade_nav_filename()
   local script_path = debug.getinfo(1, "S").source:sub(2)
   local script_dir = vim.fn.fnamemodify(script_path, ":p:h")
-  return script_dir .. "/../../../BladeNav.php"
+  return script_dir .. "/../../../../BladeNav.php"
 end
 
 --- Convert kebab-case to PascalCase.
