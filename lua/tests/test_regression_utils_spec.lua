@@ -30,13 +30,23 @@ describe("regression: fs.find_files is injection-safe (argv-based, no shell)", f
 end)
 
 describe("regression: choice.select_file executes {label, cmd} entries via vim.system, not :edit", function()
+  local root_dir_stub, system_stub, cmd_stub
+
+  before_each(function()
+    local fs = require("blade-nav.utils.fs")
+    root_dir_stub = stub(fs, "get_root_dir").returns("/fake/laravel/root")
+    system_stub = stub(vim, "system")
+    cmd_stub = stub(vim, "cmd")
+  end)
+
+  after_each(function()
+    system_stub:revert()
+    cmd_stub:revert()
+    root_dir_stub:revert()
+  end)
+
   it("passes the argv table and cwd to vim.system, and never calls vim.cmd with the literal command", function()
     local choice = require("blade-nav.utils.choice")
-    local fs = require("blade-nav.utils.fs")
-
-    local root_dir_stub = stub(fs, "get_root_dir").returns("/fake/laravel/root")
-    local system_stub = stub(vim, "system")
-    local cmd_stub = stub(vim, "cmd")
 
     local entry = {
       label = "php artisan make:component Foo",
@@ -53,10 +63,6 @@ describe("regression: choice.select_file executes {label, cmd} entries via vim.s
     assert.equals("/fake/laravel/root", call_args[2].cwd)
 
     assert.stub(cmd_stub).was_not_called()
-
-    system_stub:revert()
-    cmd_stub:revert()
-    root_dir_stub:revert()
   end)
 end)
 
@@ -135,23 +141,28 @@ describe("regression: vue-imports cache invalidates on changedtick change", func
 end)
 
 describe("regression: annotations.values lazy query init", function()
-  it("get_php_query() degrades to nil (not an error) when the parser/query is unavailable", function()
-    package.loaded["blade-nav.features.annotations.values"] = nil
+  local parse_stub
 
-    local parse_stub = stub(vim.treesitter.query, "parse").invokes(function(lang)
+  before_each(function()
+    package.loaded["blade-nav.features.annotations.values"] = nil
+    parse_stub = stub(vim.treesitter.query, "parse").invokes(function(lang)
       error("simulated: no parser available for lang: " .. tostring(lang))
     end)
+  end)
 
+  after_each(function()
+    parse_stub:revert()
+    -- Drop the module instance that memoized the simulated failure so later
+    -- specs get a fresh (real) query on their next require.
+    package.loaded["blade-nav.features.annotations.values"] = nil
+  end)
+
+  it("get_php_query() degrades to nil (not an error) when the parser/query is unavailable", function()
     local ok_require, values = pcall(require, "blade-nav.features.annotations.values")
     assert.is_true(ok_require, "require() must not eagerly parse queries: " .. tostring(values))
 
     local ok_call, result = pcall(values.get_php_query)
     assert.is_true(ok_call, "get_php_query() must catch the parse failure internally")
     assert.is_nil(result)
-
-    parse_stub:revert()
-    -- Drop the module instance that memoized the simulated failure so later
-    -- specs get a fresh (real) query on their next require.
-    package.loaded["blade-nav.features.annotations.values"] = nil
   end)
 end)

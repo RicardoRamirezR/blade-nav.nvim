@@ -2,6 +2,8 @@
 -- Behavioral coverage for blade-nav.features.annotations.values:
 -- PHP + JS treesitter query captures, multibyte-safe truncate, invalidate_maps.
 
+local stub = require("luassert.stub")
+
 local values = require("blade-nav.features.annotations.values")
 local env_extractor = require("blade-nav.extractors.env")
 local config_extractor = require("blade-nav.extractors.config")
@@ -138,61 +140,85 @@ describe("annotations.values.invalidate_maps", function()
     values.invalidate_maps()
   end)
 
-  it("memoizes get_env_map and refetches only after invalidate_maps", function()
-    local calls = 0
-    local original = env_extractor.get_map
-    env_extractor.get_map = function()
-      calls = calls + 1
-      return { FOO = "bar" }
-    end
+  describe("get_env_map", function()
+    local get_map_stub
+    local calls
 
-    local m1 = values.get_env_map()
-    local m2 = values.get_env_map()
-    assert.equals(1, calls)
-    assert.equals(m1, m2)
+    before_each(function()
+      calls = 0
+      get_map_stub = stub(env_extractor, "get_map").invokes(function()
+        calls = calls + 1
+        return { FOO = "bar" }
+      end)
+    end)
 
-    values.invalidate_maps()
-    values.get_env_map()
-    assert.equals(2, calls)
+    after_each(function()
+      get_map_stub:revert()
+    end)
 
-    env_extractor.get_map = original
+    it("memoizes get_env_map and refetches only after invalidate_maps", function()
+      local m1 = values.get_env_map()
+      local m2 = values.get_env_map()
+      assert.equals(1, calls)
+      assert.equals(m1, m2)
+
+      values.invalidate_maps()
+      values.get_env_map()
+      assert.equals(2, calls)
+    end)
   end)
 
-  it("memoizes get_cfg_map and refetches only after invalidate_maps", function()
-    local calls = 0
-    local original = config_extractor.get_map
-    config_extractor.get_map = function()
-      calls = calls + 1
-      return { ["app.name"] = { kind = "scalar", text = "Demo" } }
-    end
+  describe("get_cfg_map", function()
+    local get_map_stub
+    local calls
 
-    values.get_cfg_map()
-    values.get_cfg_map()
-    assert.equals(1, calls)
+    before_each(function()
+      calls = 0
+      get_map_stub = stub(config_extractor, "get_map").invokes(function()
+        calls = calls + 1
+        return { ["app.name"] = { kind = "scalar", text = "Demo" } }
+      end)
+    end)
 
-    values.invalidate_maps()
-    values.get_cfg_map()
-    assert.equals(2, calls)
+    after_each(function()
+      get_map_stub:revert()
+    end)
 
-    config_extractor.get_map = original
+    it("memoizes get_cfg_map and refetches only after invalidate_maps", function()
+      values.get_cfg_map()
+      values.get_cfg_map()
+      assert.equals(1, calls)
+
+      values.invalidate_maps()
+      values.get_cfg_map()
+      assert.equals(2, calls)
+    end)
   end)
 
-  it("memoizes get_lang_map and refetches only after invalidate_maps", function()
-    local calls = 0
-    local original = lang_extractor.get_map
-    lang_extractor.get_map = function()
-      calls = calls + 1
-      return { welcome = "Welcome!" }
-    end
+  describe("get_lang_map", function()
+    local get_map_stub
+    local calls
 
-    values.get_lang_map()
-    values.get_lang_map()
-    assert.equals(1, calls)
+    before_each(function()
+      calls = 0
+      get_map_stub = stub(lang_extractor, "get_map").invokes(function()
+        calls = calls + 1
+        return { welcome = "Welcome!" }
+      end)
+    end)
 
-    values.invalidate_maps()
-    values.get_lang_map()
-    assert.equals(2, calls)
+    after_each(function()
+      get_map_stub:revert()
+    end)
 
-    lang_extractor.get_map = original
+    it("memoizes get_lang_map and refetches only after invalidate_maps", function()
+      values.get_lang_map()
+      values.get_lang_map()
+      assert.equals(1, calls)
+
+      values.invalidate_maps()
+      values.get_lang_map()
+      assert.equals(2, calls)
+    end)
   end)
 end)

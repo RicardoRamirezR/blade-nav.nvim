@@ -58,23 +58,29 @@ describe("regression: textnode Config::get dead-target fix", function()
 end)
 
 describe("regression: loader bails out on a genuinely non-Laravel cwd", function()
-  it("does not set vim.g.loaded_blade_nav for a real empty directory (real is_laravel_project, not mocked)", function()
+  local tmpdir, root_dir_stub
+
+  before_each(function()
     vim.g.blade_nav = nil
     vim.g.loaded_blade_nav = nil
 
     clear_blade_nav_modules()
     local fs = require("blade-nav.utils.fs")
-    local tmpdir = vim.uv.fs_mkdtemp("/tmp/blade-nav-nonlaravel-XXXXXX")
+    tmpdir = vim.uv.fs_mkdtemp("/tmp/blade-nav-nonlaravel-XXXXXX")
     assert.is_truthy(tmpdir)
 
-    local root_dir_stub = stub(fs, "get_root_dir").returns(tmpdir)
+    root_dir_stub = stub(fs, "get_root_dir").returns(tmpdir)
+  end)
 
+  after_each(function()
+    root_dir_stub:revert()
+    vim.uv.fs_rmdir(tmpdir)
+  end)
+
+  it("does not set vim.g.loaded_blade_nav for a real empty directory (real is_laravel_project, not mocked)", function()
     local loader = require("blade-nav.loader")
     loader.ftplugin_loader()
 
     assert.is_nil(vim.g.loaded_blade_nav)
-
-    root_dir_stub:revert()
-    vim.uv.fs_rmdir(tmpdir)
   end)
 end)
