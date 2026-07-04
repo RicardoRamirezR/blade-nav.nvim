@@ -266,6 +266,7 @@ M.__test_build_route_map = routes.__test_build_route_map
 
 -- Re-exports from completions
 M.get_view_names = completions.get_view_names
+M.items_for_prefix = completions.items_for_prefix
 M.__health_check_views = completions.__health_check_views
 
 return M

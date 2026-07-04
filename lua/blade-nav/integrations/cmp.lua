@@ -56,47 +56,43 @@ function M.setup(opts)
   source.complete = function(_, request, callback)
     local line_before_cursor = request.context.cursor_before_line or ""
     local offset_1b = request.offset or 1
-    -- TODO(shared-prefix): adopt items_for_prefix
     local input_prefix = string.sub(line_before_cursor, offset_1b)
 
     input_prefix = input_prefix:gsub("^%s+", ""):gsub("%s+$", "")
 
     log.debug("Input prefix extracted: '%s' (from line: '%s', offset: %d)", input_prefix, line_before_cursor, offset_1b)
 
-    local _, completion_items = laravel.get_view_names(input_prefix, not close_tag_on_complete)
-
-    completion_items = completion_items or {}
+    local completion_items = laravel.items_for_prefix(
+      input_prefix,
+      { not_include_closing_tag = not close_tag_on_complete }
+    ) or {}
 
     log.debug("Gathered %d completion items.", #completion_items)
 
     local items = {}
     for _, item_data in ipairs(completion_items) do
-      if type(item_data) == "table" and item_data.label then
-        local cmp_item = {
-          label = item_data.label,
-          filterText = item_data.filterText or item_data.label,
-          cmp = {
-            kind_text = "BladeNav",
-            kind_hl_group = "CmpItemKindBladeNav",
-          },
-          textEdit = {
-            newText = item_data.newText or item_data.label,
-            range = {
-              start = {
-                line = request.context.cursor.line,
-                character = request.context.cursor.character - #input_prefix,
-              },
-              ["end"] = {
-                line = request.context.cursor.line,
-                character = request.context.cursor.character,
-              },
+      local cmp_item = {
+        label = item_data.label,
+        filterText = item_data.filter_text or item_data.label,
+        cmp = {
+          kind_text = "BladeNav",
+          kind_hl_group = "CmpItemKindBladeNav",
+        },
+        textEdit = {
+          newText = item_data.new_text or item_data.label,
+          range = {
+            start = {
+              line = request.context.cursor.line,
+              character = request.context.cursor.character - #input_prefix,
+            },
+            ["end"] = {
+              line = request.context.cursor.line,
+              character = request.context.cursor.character,
             },
           },
-        }
-        table.insert(items, cmp_item)
-      else
-        log.debug("Skipping invalid or unlabeled item: %s", vim.inspect(item_data))
-      end
+        },
+      }
+      table.insert(items, cmp_item)
     end
 
     local result = {

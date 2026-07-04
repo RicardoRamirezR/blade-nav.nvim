@@ -162,26 +162,31 @@ M.get_view_names = function(input, not_include_closing_tag)
   return index, items, index and PATTERNS[index].kind
 end
 
---- Compute canonical completion items for the text before the cursor.
---- Shared helper used by cmp/blink/coq integrations.
---- @param line_before_cursor string
---- @return { label: string, new_text: string, kind: string }[]|nil
-function M.items_for_prefix(line_before_cursor)
-  if not line_before_cursor or line_before_cursor == "" then
+--- Compute canonical completion items for an already-extracted prefix.
+--- Shared helper used by cmp/blink/coq integrations. Each engine extracts
+--- its own `input_prefix` (keyword offset, trailing-word match, line slice,
+--- etc.) and passes the result in unchanged; only the get_view_names call
+--- and item shaping are shared here.
+--- @param input_prefix string
+--- @param opts? { not_include_closing_tag?: boolean }
+--- @return { label: string, new_text: string, filter_text: string, kind: string }[]|nil
+function M.items_for_prefix(input_prefix, opts)
+  if not input_prefix or input_prefix == "" then
     return nil
   end
 
-  local input_prefix = line_before_cursor:match("%S*$") or ""
-  local index, entries, kind = M.get_view_names(input_prefix)
-  if not index or not entries or #entries == 0 then
+  opts = opts or {}
+  local index, entries, kind = M.get_view_names(input_prefix, opts.not_include_closing_tag)
+  if not index then
     return nil
   end
 
   local items = {}
-  for _, entry in ipairs(entries) do
+  for _, entry in ipairs(entries or {}) do
     table.insert(items, {
       label = entry.label,
       new_text = entry.newText,
+      filter_text = entry.filterText,
       kind = kind or "blade-nav",
     })
   end

@@ -17,7 +17,6 @@ _G.COQsources["blade-nav"] = {
     end
 
     local pattern = str.get_keyword_pattern()
-    -- TODO(shared-prefix): adopt items_for_prefix
     local input = args.line:sub(1, args.pos[2])
 
     if vim.fn.match(input, pattern) == -1 then
@@ -30,8 +29,8 @@ _G.COQsources["blade-nav"] = {
       close_tag_on_complete = true
     end
 
-    local index, names = laravel.get_view_names(input, not close_tag_on_complete)
-    if not index then
+    local names = laravel.items_for_prefix(input, { not_include_closing_tag = not close_tag_on_complete })
+    if not names then
       callback()
       return
     end
@@ -39,9 +38,9 @@ _G.COQsources["blade-nav"] = {
     local items = {}
     for _, name in ipairs(names) do
       table.insert(items, {
-        filterText = name.filterText,
+        filterText = name.filter_text,
         label = name.label,
-        insertText = name.newText or name.label,
+        insertText = name.new_text or name.label,
       })
     end
 

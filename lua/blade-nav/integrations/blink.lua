@@ -26,7 +26,6 @@ function Source:get_completions(ctx, callback)
   local laravel = require("blade-nav.utils.laravel")
 
   local line_before_cursor = ctx.line:sub(1, ctx.cursor[2])
-  -- TODO(shared-prefix): adopt items_for_prefix
   local input_prefix = line_before_cursor:match("[^%s]*$") or ""
 
   log.debug("Blink input prefix: '%s'", input_prefix)
@@ -36,19 +35,19 @@ function Source:get_completions(ctx, callback)
     close_tag_on_complete = true
   end
 
-  local _, completion_items = laravel.get_view_names(input_prefix, not close_tag_on_complete)
-  completion_items = completion_items or {}
+  local completion_items = laravel.items_for_prefix(
+    input_prefix,
+    { not_include_closing_tag = not close_tag_on_complete }
+  ) or {}
 
   local items = {}
   for _, item_data in ipairs(completion_items) do
-    if type(item_data) == "table" and item_data.label then
-      table.insert(items, {
-        label = item_data.label,
-        filterText = item_data.filterText or item_data.label,
-        insertText = item_data.newText or item_data.label,
-        kind = require("blink.cmp.types").CompletionItemKind.Reference,
-      })
-    end
+    table.insert(items, {
+      label = item_data.label,
+      filterText = item_data.filter_text or item_data.label,
+      insertText = item_data.new_text or item_data.label,
+      kind = require("blink.cmp.types").CompletionItemKind.Reference,
+    })
   end
 
   log.debug("Blink returning %d items", #items)
