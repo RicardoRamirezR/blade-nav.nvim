@@ -2,6 +2,7 @@
 -- Unified choice picker utility for blade-nav
 -- Supports Telescope, vim.ui.select, and inputlist as fallback.
 
+local fs = require("blade-nav.utils.fs")
 local log = require("blade-nav.utils.log")
 
 local M = {}
@@ -55,13 +56,18 @@ end
 --- Optionally runs a callback after opening.
 --- @param filename string
 --- @param after_open? fun(filename: string)
-local function open_file(filename, after_open)
+--- @param base_dir? string Resolve filename against this dir when relative.
+local function open_file(filename, after_open, base_dir)
   if not filename or filename == "" then
     log.warn("open_file called with empty filename")
     return
   end
 
   filename = sanitize_filename(filename)
+
+  if base_dir and filename:sub(1, 1) ~= "/" then
+    filename = base_dir .. "/" .. filename
+  end
 
   -- Attempt to open safely
   local ok, err = pcall(function()
@@ -121,7 +127,9 @@ local function run_command_choice(entry, after_open)
     return
   end
 
-  local ok, err = pcall(vim.system, argv, { text = true }, function(obj)
+  local root = fs.get_root_dir()
+
+  local ok, err = pcall(vim.system, argv, { text = true, cwd = root }, function(obj)
     vim.schedule(function()
       if obj.code ~= 0 then
         local output = vim.trim((obj.stdout or "") .. (obj.stderr or ""))
@@ -131,7 +139,7 @@ local function run_command_choice(entry, after_open)
 
       local created_file = derive_created_file(argv, (obj.stdout or "") .. (obj.stderr or ""))
       if created_file then
-        open_file(created_file, after_open)
+        open_file(created_file, after_open, root)
       end
     end)
   end)

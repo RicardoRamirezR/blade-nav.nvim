@@ -145,8 +145,10 @@ function M.get_component_paths(component_identifier, custom_search_paths)
       table.insert(final_choices, path)
     end
     local pascal_case_component = base_name:gsub("%-([%w])", string.upper):gsub("^%l", string.upper)
-    local make_command = "php artisan make:component " .. pascal_case_component
-    table.insert(final_choices, make_command)
+    table.insert(final_choices, {
+      label = "php artisan make:component " .. pascal_case_component,
+      cmd = { "php", "artisan", "make:component", pascal_case_component },
+    })
   end
 
   if #existing_standard_paths > 0 then

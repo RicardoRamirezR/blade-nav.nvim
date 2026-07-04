@@ -77,7 +77,8 @@ describe("Extra Laravel utils", function()
     local choices = laravel.get_component_paths("button")
     local found = false
     for _, c in ipairs(choices) do
-      if c:match("make:component Button") then
+      if type(c) == "table" and c.label:match("make:component Button") then
+        assert.same({ "php", "artisan", "make:component", "Button" }, c.cmd)
         found = true
       end
     end

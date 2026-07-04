@@ -179,11 +179,11 @@ local function test_extract_pages_path()
       expected = "Pages",
     },
     {
-      name = "Invalid path (../)",
+      name = "Relative parent path (../) allowed for monorepo support",
       content = [[
         resolve: name => definePages(`../Pages/${name}.vue`)
       ]],
-      expected_error = ErrorTypes.INVALID_PATH,
+      expected = "./Pages",
     },
     {
       name = "Invalid characters",

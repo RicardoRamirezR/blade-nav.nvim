@@ -14,10 +14,13 @@ local M = {}
 --- @return string
 local function pascal_case_path(name)
   local segments = vim.split(name, ".", { plain = true })
-  for i, segment in ipairs(segments) do
-    segments[i] = string_utils.kebab_to_pascal(segment)
+  local pascal_segments = {}
+  for _, segment in ipairs(segments) do
+    if segment ~= "" then
+      table.insert(pascal_segments, string_utils.kebab_to_pascal(segment))
+    end
   end
-  return table.concat(segments, "/")
+  return table.concat(pascal_segments, "/")
 end
 
 function M.get_capabilities()
