@@ -1,4 +1,5 @@
 -- lua/tests/test_extras_spec.lua
+local stub = require("luassert.stub")
 local cache = require("blade-nav.utils.cache")
 local laravel = require("blade-nav.utils.laravel")
 local fs = require("blade-nav.utils.fs")
@@ -41,16 +42,15 @@ describe("Extra Laravel utils", function()
   -- (3) PSR-4 mapping parsing
   --
   it("parses psr-4 mappings from composer.json", function()
-    -- mock fs.read_file
-    fs.read_file = function()
-      return vim.json.encode({
-        autoload = { ["psr-4"] = { ["Noah\\"] = "src/" } },
-      })
-    end
+    local read_file = stub(fs, "read_file").returns(vim.json.encode({
+      autoload = { ["psr-4"] = { ["Noah\\"] = "src/" } },
+    }))
 
     local mappings = laravel.get_psr4_mappings()
     assert.is_table(mappings)
     assert.equals("src/", mappings["Noah\\"])
+
+    read_file:revert()
   end)
 
   --
@@ -62,17 +62,16 @@ describe("Extra Laravel utils", function()
     assert.is_nil(laravel.normalize_view_name(nil))
   end)
 
+  it("leaves an already-slash-form .blade.php view name intact", function()
+    assert.equals("admin/dashboard.blade.php", laravel.normalize_view_name("admin/dashboard.blade.php"))
+  end)
+
   --
   -- (5) component path resolution
   --
   it("returns make:component command when component is missing", function()
-    -- mock fs.path_exists
-    fs.path_exists = function()
-      return false
-    end
-    fs.is_dir = function()
-      return false
-    end
+    local path_exists = stub(fs, "path_exists").returns(false)
+    local is_dir = stub(fs, "is_dir").returns(false)
 
     local choices = laravel.get_component_paths("button")
     local found = false
@@ -83,5 +82,8 @@ describe("Extra Laravel utils", function()
       end
     end
     assert.is_true(found)
+
+    path_exists:revert()
+    is_dir:revert()
   end)
 end)

@@ -1,10 +1,6 @@
 -- lua/tests/test_route_map_spec.lua
 local laravel = require("blade-nav.utils.laravel")
 
--- Extracted helper you should add in laravel.lua:
--- local function build_route_map(routes) ... end
--- return build_route_map
-
 describe("build_route_map", function()
   it("parses routes with controller@method", function()
     local routes = {

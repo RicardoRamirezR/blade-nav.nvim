@@ -66,7 +66,7 @@ describe("textnode integration (tree-sitter)", function()
       [[
       <div>hello</div>
     ]],
-      "blade",
+      { filetype = "blade" },
       function()
         vim.api.nvim_win_set_cursor(0, { 1, 5 })
         local full, name, arg = textnode.get_text_node()

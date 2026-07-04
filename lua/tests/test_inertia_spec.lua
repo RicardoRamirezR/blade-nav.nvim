@@ -1,3 +1,5 @@
+local stub = require("luassert.stub")
+
 local function clear_blade_nav_modules()
   for k in pairs(package.loaded) do
     if k:match("^blade%-nav") then
@@ -73,15 +75,14 @@ describe("Inertia target handler", function()
       vim.api.nvim_set_current_buf(bufnr)
 
       local fs = require("blade-nav.utils.fs")
-      fs.get_root_dir = function()
-        return fixtures_dir
-      end
+      local root_dir_stub = stub(fs, "get_root_dir").returns(fixtures_dir)
 
       local result = inertia.get_target({ filetype = "vue", line = "<template>" })
       assert.is_not_nil(result)
       assert.equals("inertia_reverse", result.type)
       assert.equals("Dashboard", result.name)
 
+      root_dir_stub:revert()
       vim.api.nvim_buf_delete(bufnr, { force = true })
     end)
 

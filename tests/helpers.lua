@@ -45,7 +45,6 @@ function M.with_buffer(lines, opts, fn)
   -- set initial cursor if provided (row 1-indexed, col 0-indexed)
   if opts.cursor then
     vim.api.nvim_win_set_cursor(0, { opts.cursor[1], opts.cursor[2] })
-    local pos = vim.api.nvim_win_get_cursor(0)
   else
     vim.api.nvim_win_set_cursor(0, { 1, 0 })
   end

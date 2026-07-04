@@ -8,20 +8,24 @@ end
 
 clear_blade_nav_modules()
 
+local stub = require("luassert.stub")
 local fixtures_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h") .. "/fixtures"
 
 local fs = require("blade-nav.utils.fs")
-fs.get_root_dir = function()
-  return fixtures_dir
-end
-
 local cache = require("blade-nav.utils.cache")
 local config_extractor = require("blade-nav.extractors.config")
 local env_extractor = require("blade-nav.extractors.env")
 
 describe("Config extractor", function()
+  local root_dir_stub
+
   before_each(function()
     cache.clear()
+    root_dir_stub = stub(fs, "get_root_dir").returns(fixtures_dir)
+  end)
+
+  after_each(function()
+    root_dir_stub:revert()
   end)
 
   it("loads services.php keys", function()
@@ -42,8 +46,15 @@ describe("Config extractor", function()
 end)
 
 describe("Env extractor", function()
+  local root_dir_stub
+
   before_each(function()
     cache.clear()
+    root_dir_stub = stub(fs, "get_root_dir").returns(fixtures_dir)
+  end)
+
+  after_each(function()
+    root_dir_stub:revert()
   end)
 
   it("reads .env keys", function()
