@@ -278,6 +278,7 @@ function M.get_handler_info()
 end
 
 --- Get a loaded handler by name.
+--- Only valid for names returned by get_compatible_handlers; it does not load handlers itself.
 --- @param name string
 --- @return table|nil
 function M.get_handler(name)

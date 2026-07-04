@@ -70,6 +70,7 @@ describe("integrations.cmp source.complete", function()
       return fixtures_dir
     end
     cache.clear()
+    config_module.setup({ close_tag_on_complete = true })
   end)
 
   after_each(function()
@@ -79,8 +80,6 @@ describe("integrations.cmp source.complete", function()
   end)
 
   it("returns @include('welcome') with a full closing tag by default", function()
-    config_module.setup({ close_tag_on_complete = true })
-
     helpers.with_buffer({ "    @include('" }, { filetype = "blade" }, function()
       local source = setup_cmp_source({ close_tag_on_complete = true })
       assert.is_not_nil(source, "expected cmp.register_source to have captured the blade-nav source")
@@ -122,13 +121,9 @@ describe("integrations.cmp source.complete", function()
       -- Label is stable; newText drops the trailing "')" when close_tag_on_complete=false.
       assert.equals("@include('welcome", found.textEdit.newText)
     end)
-
-    config_module.setup({ close_tag_on_complete = true })
   end)
 
   it("returns component items for the <x- prefix", function()
-    config_module.setup({ close_tag_on_complete = true })
-
     helpers.with_buffer({ "    <x-" }, { filetype = "blade" }, function()
       local source = setup_cmp_source({ close_tag_on_complete = true })
 
