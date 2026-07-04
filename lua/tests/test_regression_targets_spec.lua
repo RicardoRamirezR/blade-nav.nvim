@@ -77,6 +77,52 @@ describe("regression: targets/livewire kebab_to_pascal-based path building", fun
   end)
 end)
 
+describe("regression: laravel.get_component_paths root-relative path resolution", function()
+  local root_dir_stub
+  local tmpdir
+
+  before_each(function()
+    clear_blade_nav_modules()
+    tmpdir = vim.uv.fs_mkdtemp("/tmp/blade-nav-component-test-XXXXXX")
+    assert.is_truthy(tmpdir)
+    vim.uv.fs_mkdir(tmpdir .. "/resources", 493)
+    vim.uv.fs_mkdir(tmpdir .. "/resources/views", 493)
+    vim.uv.fs_mkdir(tmpdir .. "/resources/views/components", 493)
+    local fd = assert(vim.uv.fs_open(tmpdir .. "/resources/views/components/alert.blade.php", "w", 420))
+    vim.uv.fs_write(fd, "<div>alert</div>", -1)
+    vim.uv.fs_close(fd)
+
+    local fs = require("blade-nav.utils.fs")
+    root_dir_stub = stub(fs, "get_root_dir").returns(tmpdir)
+  end)
+
+  after_each(function()
+    root_dir_stub:revert()
+    vim.fn.delete(tmpdir, "rf")
+  end)
+
+  it("resolves the existing anon view file as root-prefixed, regardless of cwd", function()
+    local laravel = require("blade-nav.utils.laravel")
+
+    -- cwd is irrelevant here because fs.get_root_dir is stubbed above; this
+    -- proves get_component_paths no longer builds cwd-relative candidates.
+    local choices = laravel.get_component_paths("alert")
+
+    assert.is_true(
+      vim.tbl_contains(choices, tmpdir .. "/resources/views/components/alert.blade.php"),
+      "expected root-prefixed existing file, got: " .. vim.inspect(choices)
+    )
+
+    local has_creation_entry = false
+    for _, c in ipairs(choices) do
+      if type(c) == "table" and c.cmd then
+        has_creation_entry = true
+      end
+    end
+    assert.is_false(has_creation_entry, "did not expect a creation command entry when the file exists")
+  end)
+end)
+
 describe("regression: targets/route line-scan resolves to_route()", function()
   it("recognizes to_route('dashboard') via the line-scan path (no context.target/first_arg)", function()
     clear_blade_nav_modules()

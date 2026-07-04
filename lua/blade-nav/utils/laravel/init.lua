@@ -101,13 +101,18 @@ function M.get_component_paths(component_identifier, custom_search_paths)
     return final_choices
   end
 
+  local root = fs.get_root_dir()
+
   local base_name = component_identifier:match("^([^.]+)") or component_identifier
   local sub_path = component_identifier:gsub("^" .. vim.pesc(base_name), ""):gsub("^%.", "/")
   local studly_case_name = base_name:gsub("%-([%w])", string.upper):gsub("^%l", string.upper)
 
-  local class_file_path = "app/View/Components/" .. studly_case_name .. sub_path .. ".php"
-  local anon_view_path = "resources/views/components/" .. component_identifier:gsub("%.", "/") .. ".blade.php"
-  local anon_index_path = "resources/views/components/" .. component_identifier:gsub("%.", "/") .. "/index.blade.php"
+  local class_file_path = root .. "/app/View/Components/" .. studly_case_name .. sub_path .. ".php"
+  local anon_view_path = root .. "/resources/views/components/" .. component_identifier:gsub("%.", "/") .. ".blade.php"
+  local anon_index_path = root
+    .. "/resources/views/components/"
+    .. component_identifier:gsub("%.", "/")
+    .. "/index.blade.php"
 
   local all_standard_paths = {
     anon_view_path,
@@ -154,7 +159,9 @@ function M.get_component_paths(component_identifier, custom_search_paths)
   if #existing_standard_paths > 0 then
     for _, custom_base_path in ipairs(custom_search_paths) do
       local normalized_custom_path = custom_base_path:gsub("/$", "")
-      local custom_view_path = normalized_custom_path
+      local custom_view_path = root
+        .. "/"
+        .. normalized_custom_path
         .. "/components/"
         .. component_identifier:gsub("%.", "/")
         .. ".blade.php"
