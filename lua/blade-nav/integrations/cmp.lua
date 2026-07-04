@@ -17,7 +17,6 @@ function M.setup(opts)
     log.debug("nvim-cmp integration setup already called, skipping.")
     return
   end
-  registered = true
 
   opts = opts or {}
   local close_tag_on_complete = opts.close_tag_on_complete ~= false
@@ -27,6 +26,8 @@ function M.setup(opts)
     log.warn("nvim-cmp not found, skipping BladeNav cmp source setup.")
     return
   end
+
+  registered = true
 
   local source = {}
 
@@ -55,6 +56,7 @@ function M.setup(opts)
   source.complete = function(_, request, callback)
     local line_before_cursor = request.context.cursor_before_line or ""
     local offset_1b = request.offset or 1
+    -- TODO(shared-prefix): adopt items_for_prefix
     local input_prefix = string.sub(line_before_cursor, offset_1b)
 
     input_prefix = input_prefix:gsub("^%s+", ""):gsub("%s+$", "")
@@ -81,12 +83,12 @@ function M.setup(opts)
             newText = item_data.newText or item_data.label,
             range = {
               start = {
-                line = request.context.cursor.row - 1,
-                character = offset_1b - 1,
+                line = request.context.cursor.line,
+                character = request.context.cursor.character - #input_prefix,
               },
               ["end"] = {
-                line = request.context.cursor.row - 1,
-                character = request.context.cursor.col - 1,
+                line = request.context.cursor.line,
+                character = request.context.cursor.character,
               },
             },
           },
@@ -106,20 +108,38 @@ function M.setup(opts)
     callback(result)
   end
 
-  local current_sources = cmp.get_config().sources or {}
-  local new_sources = {}
-
-  table.insert(new_sources, { name = "blade-nav", priority = 1000 })
-  for _, current_source in ipairs(current_sources) do
-    if current_source.name ~= "blade-nav" then
-      table.insert(new_sources, current_source)
+  --- Resolves the sources already configured for a filetype (falling back to
+  --- the global sources) without clobbering the other filetype's config.
+  --- @param ft string
+  --- @return table
+  local function existing_sources_for(ft)
+    local ok_internal, cmp_config = pcall(require, "cmp.config")
+    local ft_config = ok_internal and cmp_config.filetypes and cmp_config.filetypes[ft]
+    if ft_config and ft_config.sources then
+      return ft_config.sources
     end
+    if ok_internal and cmp_config.global and cmp_config.global.sources then
+      return cmp_config.global.sources
+    end
+    return cmp.get_config().sources or {}
+  end
+
+  local function with_blade_nav_source(sources)
+    local merged = { { name = "blade-nav", priority = 1000 } }
+    for _, existing_source in ipairs(sources or {}) do
+      if existing_source.name ~= "blade-nav" then
+        table.insert(merged, existing_source)
+      end
+    end
+    return merged
   end
 
   cmp.register_source("blade-nav", source.new())
-  cmp.setup.filetype({ "blade", "php" }, {
-    sources = cmp.config.sources(new_sources),
-  })
+  for _, ft in ipairs({ "blade", "php" }) do
+    cmp.setup.filetype(ft, {
+      sources = cmp.config.sources(with_blade_nav_source(existing_sources_for(ft))),
+    })
+  end
 
   vim.api.nvim_set_hl(0, "CmpItemKindBladeNav", { fg = "#fb503b", default = true })
 

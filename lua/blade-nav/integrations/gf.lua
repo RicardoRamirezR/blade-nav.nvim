@@ -6,14 +6,17 @@ local log = require("blade-nav.utils.log")
 
 local M = {}
 local registered = false
-local gf_mapping
 
---- Gets the current keymap for 'gf' in normal mode.
+local GF_DESC = "BladeNav: Enhanced go-to file under cursor"
+local GF_FILETYPES = { blade = true, php = true, vue = true }
+
+--- Gets a keymap for the given lhs in a mode.
 --- @param mode string The mode (e.g., "n" for normal).
 --- @param lhs string The left-hand side of the mapping (e.g., "gf").
+--- @param buf? integer Buffer handle; when given, look up a buffer-local mapping.
 --- @return table|nil The keymap table or nil if not found.
-local function get_keymap(mode, lhs)
-  local keymaps = vim.api.nvim_get_keymap(mode)
+local function get_keymap(mode, lhs, buf)
+  local keymaps = buf and vim.api.nvim_buf_get_keymap(buf, mode) or vim.api.nvim_get_keymap(mode)
   for _, keymap in ipairs(keymaps) do
     if keymap.lhs == lhs then
       return keymap
@@ -22,13 +25,19 @@ local function get_keymap(mode, lhs)
 end
 
 --- Executes the native Neovim `gf` command.
---- Attempts to use the user's existing mapping if it exists, otherwise falls back.
+--- Looks up the user's global `gf` mapping at invocation time and uses it if it
+--- exists (calling a Lua `callback` directly, or feeding a string `rhs`),
+--- otherwise falls back to the built-in `gf`.
 local function gf_native()
-  if gf_mapping then
+  local gf_mapping = get_keymap("n", "gf")
+
+  if gf_mapping and gf_mapping.callback then
+    gf_mapping.callback()
+  elseif gf_mapping and type(gf_mapping.rhs) == "string" then
     local rhs = vim.api.nvim_replace_termcodes(gf_mapping.rhs, true, true, true)
     vim.api.nvim_feedkeys(rhs, "n", false)
   else
-    vim.fn.execute("normal! gf", "silent")
+    pcall(vim.cmd, "silent! normal! gf")
   end
 end
 
@@ -48,6 +57,35 @@ function M.gf()
   end
 end
 
+--- Sets the buffer-local `gf` mapping for a single buffer, unless a
+--- pre-existing buffer-local `gf` mapping belongs to someone else (respected
+--- and left untouched).
+--- @param buf integer Buffer handle.
+local function apply_gf_mapping(buf)
+  if vim.b[buf].blade_nav_gf then
+    return
+  end
+  vim.b[buf].blade_nav_gf = true
+
+  local existing = get_keymap("n", "gf", buf)
+  if existing and existing.desc ~= GF_DESC then
+    log.debug("Buffer %d already has a custom gf mapping, leaving it intact.", buf)
+    return
+  end
+
+  if existing then
+    pcall(vim.keymap.del, "n", "gf", { buffer = buf })
+  end
+
+  vim.keymap.set("n", "gf", M.gf, {
+    buffer = buf,
+    noremap = true,
+    silent = true,
+    desc = GF_DESC,
+  })
+  log.debug("BladeNav gf mapping set for buffer %d.", buf)
+end
+
 --- Setup function for the `gf` integration.
 --- Registers the `gf` keymap for relevant filetypes.
 function M.setup()
@@ -57,25 +95,21 @@ function M.setup()
   end
   registered = true
 
-  gf_mapping = get_keymap("n", "gf")
-
-  vim.api.nvim_create_autocmd("BufWinEnter", {
+  vim.api.nvim_create_autocmd("FileType", {
     group = vim.api.nvim_create_augroup("blade_nav_gf_integration", { clear = true }),
+    pattern = { "blade", "php", "vue" },
     callback = function(args)
-      local buf_ft = vim.api.nvim_get_option_value("filetype", { buf = args.buf })
-      if buf_ft == "blade" or buf_ft == "php" or buf_ft == "vue" then
-        pcall(vim.keymap.del, "n", "gf", { buffer = args.buf })
-
-        vim.keymap.set("n", "gf", M.gf, {
-          buffer = args.buf,
-          noremap = true,
-          silent = true,
-          desc = "BladeNav: Enhanced go-to file under cursor",
-        })
-        log.debug("BladeNav gf mapping set for buffer %d (filetype: %s)", args.buf, buf_ft)
-      end
+      apply_gf_mapping(args.buf)
     end,
   })
+
+  -- Setup runs synchronously while handling the FileType event of the buffer
+  -- that triggered it (via ftplugin loading), so the autocmd above won't fire
+  -- for that same buffer/event cycle. Cover it explicitly here.
+  local current_buf = vim.api.nvim_get_current_buf()
+  if GF_FILETYPES[vim.api.nvim_get_option_value("filetype", { buf = current_buf })] then
+    apply_gf_mapping(current_buf)
+  end
 
   log.info("BladeNav gf integration setup complete.")
 end

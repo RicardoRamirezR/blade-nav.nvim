@@ -24,15 +24,17 @@ local function check_environment()
   ok(string.format("Neovim version: %d.%d.%d", version.major, version.minor, version.patch))
   ok("Operating System: " .. vim.uv.os_uname().sysname)
 
+  local root = fs.get_root_dir()
+
   if fs.command_exists("php") then
-    local php_version = vim.fn.system("php --version"):match("^[^\n]+")
+    local php_version = cmd.execute_silent({ "php", "--version" }, { cwd = root }):match("^[^\n]+")
     ok("PHP: " .. (php_version or "unknown version"))
   else
     error("PHP not found in PATH")
   end
 
   if fs.command_exists("php") then
-    local artisan_version = vim.fn.system("php artisan --version"):match("^[^\n]+")
+    local artisan_version = cmd.execute_silent({ "php", "artisan", "--version" }, { cwd = root }):match("^[^\n]+")
     if artisan_version and artisan_version ~= "" then
       ok("Artisan: " .. artisan_version)
     else
@@ -140,7 +142,12 @@ local function check_blade_command()
     return
   end
 
-  local decoded = vim.fn.json_decode(output)
+  local ok_decode, decoded = pcall(vim.fn.json_decode, output)
+  if not ok_decode or type(decoded) ~= "table" then
+    warn("Could not parse `php artisan --format=json` output: " .. tostring(decoded))
+    return
+  end
+
   local found = false
   for _, command in ipairs(decoded.commands or {}) do
     if command.name == "blade-nav:components-aliases" then
@@ -163,7 +170,7 @@ local function check_blade_command()
   end
   local_blade = laravel.modify_namespace(local_blade, laravel.psr4_app())
 
-  local file, file_err = fs.read_file("app/Console/Commands/BladeNav.php")
+  local file, file_err = fs.read_file(root .. "/app/Console/Commands/BladeNav.php")
   if not file then
     warn("BladeNav.php not found in app/Console/Commands/: " .. file_err)
     return
@@ -302,6 +309,10 @@ end
 --------------------------------------------------------------------------------
 function M.check()
   start("BladeNav Health Check")
+
+  if vim.fn.has("nvim-0.11") == 0 then
+    error("blade-nav requires Neovim >= 0.11")
+  end
 
   ok("BladeNav plugin loaded")
 
