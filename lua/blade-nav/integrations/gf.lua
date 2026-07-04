@@ -8,7 +8,7 @@ local M = {}
 local registered = false
 
 local GF_DESC = "BladeNav: Enhanced go-to file under cursor"
-local GF_FILETYPES = { blade = true, php = true, vue = true }
+local GF_FILETYPES = { "blade", "php", "vue" }
 
 --- Gets a keymap for the given lhs in a mode.
 --- @param mode string The mode (e.g., "n" for normal).
@@ -97,7 +97,7 @@ function M.setup()
 
   vim.api.nvim_create_autocmd("FileType", {
     group = vim.api.nvim_create_augroup("blade_nav_gf_integration", { clear = true }),
-    pattern = { "blade", "php", "vue" },
+    pattern = GF_FILETYPES,
     callback = function(args)
       apply_gf_mapping(args.buf)
     end,
@@ -107,7 +107,7 @@ function M.setup()
   -- that triggered it (via ftplugin loading), so the autocmd above won't fire
   -- for that same buffer/event cycle. Cover it explicitly here.
   local current_buf = vim.api.nvim_get_current_buf()
-  if GF_FILETYPES[vim.api.nvim_get_option_value("filetype", { buf = current_buf })] then
+  if vim.tbl_contains(GF_FILETYPES, vim.api.nvim_get_option_value("filetype", { buf = current_buf })) then
     apply_gf_mapping(current_buf)
   end
 

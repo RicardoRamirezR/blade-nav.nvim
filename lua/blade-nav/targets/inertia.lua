@@ -142,13 +142,11 @@ local function invalidate_pages_cache()
 end
 
 local function watch_app_file()
-  if app_watcher then
-    pcall(function()
-      app_watcher:stop()
-      app_watcher:close()
-    end)
-    app_watcher = nil
+  if app_watcher and not app_watcher:is_closing() then
+    log.debug("App file watcher already active, reusing.")
+    return
   end
+  app_watcher = nil
 
   local root = fs.get_root_dir()
   local js_dir = root .. "/resources/js"

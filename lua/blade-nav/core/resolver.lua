@@ -10,7 +10,7 @@ local M = {}
 function M.resolve(context)
   log.debug("Starting resolution process.")
   for _, handler_name in ipairs(targets.get_compatible_handlers(context)) do
-    local handler = targets._handlers[handler_name]
+    local handler = targets.get_handler(handler_name)
     if handler and type(handler.get_target) == "function" then
       local ok, result = pcall(handler.get_target, context)
       if ok and result then

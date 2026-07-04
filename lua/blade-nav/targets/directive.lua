@@ -74,7 +74,8 @@ function M.get_target(context)
     for _, user_path in ipairs(user_laravel_components_paths) do
       if type(user_path) == "string" and user_path ~= "" then
         local normalized_path = user_path:gsub("/+$", "") .. "/"
-        table.insert(view_dirs_to_check, root .. "/" .. normalized_path)
+        local dir_to_check = normalized_path:match("^/") and normalized_path or root .. "/" .. normalized_path
+        table.insert(view_dirs_to_check, dir_to_check)
         log.debug("Added user-defined path to search list: %s", normalized_path)
       end
     end

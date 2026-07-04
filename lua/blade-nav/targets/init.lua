@@ -277,6 +277,13 @@ function M.get_handler_info()
   }
 end
 
+--- Get a loaded handler by name.
+--- @param name string
+--- @return table|nil
+function M.get_handler(name)
+  return M._handlers[name]
+end
+
 --- Get capabilities for a specific handler.
 --- @param handler_name string
 --- @return table|nil

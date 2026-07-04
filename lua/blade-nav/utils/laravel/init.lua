@@ -159,12 +159,9 @@ function M.get_component_paths(component_identifier, custom_search_paths)
   if #existing_standard_paths > 0 then
     for _, custom_base_path in ipairs(custom_search_paths) do
       local normalized_custom_path = custom_base_path:gsub("/$", "")
-      local custom_view_path = root
-        .. "/"
-        .. normalized_custom_path
-        .. "/components/"
-        .. component_identifier:gsub("%.", "/")
-        .. ".blade.php"
+      local custom_base = normalized_custom_path:match("^/") and normalized_custom_path
+        or root .. "/" .. normalized_custom_path
+      local custom_view_path = custom_base .. "/components/" .. component_identifier:gsub("%.", "/") .. ".blade.php"
       if fs.path_exists(custom_view_path) and not fs.is_dir(custom_view_path) then
         table.insert(final_choices, custom_view_path)
       end
