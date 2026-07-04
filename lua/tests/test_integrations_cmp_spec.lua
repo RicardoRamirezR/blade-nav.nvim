@@ -25,9 +25,11 @@ describe("integrations.cmp source.complete", function()
           captured_source = instance
         end,
         setup = { filetype = function() end },
-        config = { sources = function(x)
-          return x
-        end },
+        config = {
+          sources = function(x)
+            return x
+          end,
+        },
         get_config = function()
           return { sources = {} }
         end,

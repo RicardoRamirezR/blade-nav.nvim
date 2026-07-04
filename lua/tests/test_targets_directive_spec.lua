@@ -74,10 +74,7 @@ describe("targets.directive.get_target", function()
 
     assert.is_not_nil(result)
     assert.is_true(
-      vim.tbl_contains(
-        result.choices,
-        FAKE_ROOT .. "/packages/acme/resources/views/widgets/card.blade.php"
-      ),
+      vim.tbl_contains(result.choices, FAKE_ROOT .. "/packages/acme/resources/views/widgets/card.blade.php"),
       "expected extra search path candidate, got: " .. vim.inspect(result.choices)
     )
 

@@ -125,7 +125,13 @@ describe("commands.install_artisan_command", function()
     local source_path = laravel.get_blade_nav_filename()
 
     local content, err = orig_read_file(source_path)
-    assert.is_not_nil(content, "expected BladeNav.php to be readable at " .. source_path .. " (" .. tostring(err) .. ")")
-    assert.is_true(content:find("class BladeNav", 1, true) ~= nil, "expected BladeNav.php content to define class BladeNav")
+    assert.is_not_nil(
+      content,
+      "expected BladeNav.php to be readable at " .. source_path .. " (" .. tostring(err) .. ")"
+    )
+    assert.is_true(
+      content:find("class BladeNav", 1, true) ~= nil,
+      "expected BladeNav.php content to define class BladeNav"
+    )
   end)
 end)

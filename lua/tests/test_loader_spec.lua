@@ -70,7 +70,7 @@ describe("BladeNav loader", function()
     local args = notify.calls[1].refs
     assert.matches("%[BladeNav%]", args[1]) -- has prefix
     assert.matches("Setup failed", args[1]) -- contains failure context
-    assert.matches("boom!", args[1])        -- includes error reason
+    assert.matches("boom!", args[1]) -- includes error reason
     assert.is_true(vim.g.loaded_blade_nav)
   end)
 
@@ -90,8 +90,8 @@ describe("BladeNav loader", function()
     assert.stub(notify).was_called()
 
     local args = notify.calls[1].refs
-    assert.matches("%[BladeNav%]", args[1])     -- has prefix
-    assert.matches("Failed to load", args[1])   -- contains failure context
+    assert.matches("%[BladeNav%]", args[1]) -- has prefix
+    assert.matches("Failed to load", args[1]) -- contains failure context
     assert.matches("module not found", args[1]) -- includes error reason
     assert.is_true(vim.g.loaded_blade_nav)
   end)

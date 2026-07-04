@@ -8,7 +8,7 @@ describe("cache module", function()
 
   it("expires values after ttl", function()
     cache.set("baz", "qux")
-    vim.wait(20)                        -- 20ms wait
+    vim.wait(20) -- 20ms wait
     assert.is_nil(cache.get("baz", 10)) -- ttl=10ms
   end)
 

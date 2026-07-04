@@ -101,8 +101,8 @@ local function merge_config_with_legacy(user_opts)
     local legacy_laravel_components = legacy_global_config.laravel_components
 
     if
-        type(legacy_laravel_components) == "table"
-        and (not user_opts.laravel_components_paths or vim.tbl_isempty(user_opts.laravel_components_paths))
+      type(legacy_laravel_components) == "table"
+      and (not user_opts.laravel_components_paths or vim.tbl_isempty(user_opts.laravel_components_paths))
     then
       merged_config.laravel_components_paths = vim.deepcopy(legacy_laravel_components)
     end

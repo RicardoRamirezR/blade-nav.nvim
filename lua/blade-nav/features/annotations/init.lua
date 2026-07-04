@@ -107,8 +107,8 @@ function M.setup()
     group = grp,
     callback = function(args)
       if
-          vim.tbl_contains(WEB_FILETYPES, vim.bo[args.buf].filetype)
-          and (config.show_on_load or rendered_bufs[args.buf])
+        vim.tbl_contains(WEB_FILETYPES, vim.bo[args.buf].filetype)
+        and (config.show_on_load or rendered_bufs[args.buf])
       then
         render_debounced(args.buf)
       end

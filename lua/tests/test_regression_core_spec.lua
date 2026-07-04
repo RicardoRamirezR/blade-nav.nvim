@@ -44,16 +44,12 @@ describe("regression: textnode Config::get dead-target fix", function()
     -- via is_target(); with the old "Config::get()" (parens-included) list
     -- entry this comparison always fails and the walk-up silently returns
     -- the inner "now" call instead.
-    helpers.with_buffer(
-      "<?php\nConfig::get('key', now());\n",
-      { filetype = "php", cursor = { 2, 20 } },
-      function()
-        local full, fname, first_arg = textnode.get_text_node()
-        assert.equals("Config::get", fname)
-        assert.equals("key", first_arg)
-        assert.is_not_nil(full)
-      end
-    )
+    helpers.with_buffer("<?php\nConfig::get('key', now());\n", { filetype = "php", cursor = { 2, 20 } }, function()
+      local full, fname, first_arg = textnode.get_text_node()
+      assert.equals("Config::get", fname)
+      assert.equals("key", first_arg)
+      assert.is_not_nil(full)
+    end)
   end)
 end)
 

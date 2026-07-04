@@ -302,7 +302,7 @@ function M.resolve(target_info)
     if not chosen then
       -- As fallback try matching by suffix
       for _, f in ipairs(all_files) do
-        if opened_abs:sub(- #f.path) == f.path then
+        if opened_abs:sub(-#f.path) == f.path then
           chosen = f
           break
         end

@@ -57,7 +57,11 @@ end
 --- @return fun(target_info: table): boolean
 function M.noop_resolve(handler_label)
   return function(target_info)
-    log.warn("%s handler resolve function called unexpectedly. Target info: %s", handler_label, vim.inspect(target_info))
+    log.warn(
+      "%s handler resolve function called unexpectedly. Target info: %s",
+      handler_label,
+      vim.inspect(target_info)
+    )
     return false
   end
 end
