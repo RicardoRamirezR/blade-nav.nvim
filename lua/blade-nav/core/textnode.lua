@@ -345,7 +345,11 @@ function M.extract_php(node, bufnr)
 
   local text, function_name, first_arg = extract_from_node(start_node)
 
-  if function_name and is_target(function_name, "php") then
+  if not function_name then
+    return text, nil, first_arg
+  end
+
+  if is_target(function_name, "php") then
     return text, function_name, first_arg
   end
 
