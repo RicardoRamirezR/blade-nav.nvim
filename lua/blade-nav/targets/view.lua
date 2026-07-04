@@ -2,6 +2,7 @@
 
 local fs = require("blade-nav.utils.fs")
 local log = require("blade-nav.utils.log")
+local shared = require("blade-nav.targets.shared")
 local treesitter = require("blade-nav.utils.treesitter")
 
 local M = {}
@@ -62,7 +63,14 @@ function M.get_target(context)
   log.debug("Line identified as candidate type: %s", target_type)
 
   if not raw_view_name then
-    local found_keys = treesitter.extract_keys_from_code(line, target_type)
+    local found_keys
+    if target_type == "route" then
+      -- Route::view('/uri', 'view.name'): the view name is the 2nd argument.
+      local second_arg = treesitter.extract_scoped_call_arg(line, "Route", "view", 2)
+      found_keys = second_arg and { second_arg } or {}
+    else
+      found_keys = treesitter.extract_keys_from_code(line, target_type)
+    end
 
     log.debug("Found keys: %s", vim.inspect(found_keys))
     if not found_keys or type(found_keys) ~= "table" or #found_keys == 0 then
@@ -80,35 +88,14 @@ function M.get_target(context)
 
   log.debug("Extracted primary view name: %s", raw_view_name)
 
-  local final_choices = {}
-
-  if raw_view_name:find("::", 1, true) then
-    local namespace, view_part = raw_view_name:match("^([^:]+)::(.+)$")
-    if namespace and view_part then
-      local relative_path = view_part:gsub("%.", "/") .. ".blade.php"
-      local candidates = {
-        VIEW_DIR .. "vendor/" .. namespace .. "/" .. relative_path,
-      }
-      for _, candidate in ipairs(candidates) do
-        if fs.path_exists(candidate) and not fs.is_dir(candidate) then
-          table.insert(final_choices, candidate)
-        end
-      end
-      if #final_choices == 0 then
-        final_choices = candidates
-      end
-    end
-  else
-    local normalized_relative_path = raw_view_name:gsub("%.", "/") .. ".blade.php"
-    local path = VIEW_DIR .. normalized_relative_path
-
-    if fs.path_exists(path) and not fs.is_dir(path) then
-      table.insert(final_choices, path)
-      log.debug("Found existing view file: %s", path)
-    else
-      final_choices = { path }
-    end
+  local root = fs.get_root_dir()
+  local candidates = shared.build_view_paths(raw_view_name, { root .. "/" .. VIEW_DIR }, ".blade.php")
+  if #candidates == 0 then
+    log.debug("Could not calculate any view path candidates for '%s'.", raw_view_name)
+    return nil
   end
+
+  local final_choices = shared.existing_or_all(fs, candidates)
 
   local result = {
     type = "view",
@@ -123,9 +110,6 @@ end
 -- The resolve function is no longer the primary way this handler resolves targets
 -- for simple file opening. The logic is handled in get_target and delegated to the core.
 -- Keeping it as a no-op or removing it is acceptable.
-M.resolve = function(target_info)
-  log.warn("View handler resolve function called unexpectedly. Target info: %s", vim.inspect(target_info))
-  return false
-end
+M.resolve = shared.noop_resolve("View")
 
 return M

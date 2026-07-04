@@ -85,7 +85,7 @@ end
 --- @param key_name string The environment variable name (e.g., "APP_KEY").
 --- @return boolean True if successfully opened/navigated.
 function M._resolve_env(key_name)
-  local env_file_path = "./.env"
+  local env_file_path = fs.get_root_dir() .. "/.env"
   local found = fs.path_exists(env_file_path) and not fs.is_dir(env_file_path)
   if not found then
     log.warn(".env file not found at '%s'.", env_file_path)
@@ -172,7 +172,7 @@ function M._resolve_config(full_config_key)
   end
 
   local config_file_name = table.remove(parts, 1)
-  local config_file_path = "./config/" .. config_file_name .. ".php"
+  local config_file_path = fs.get_root_dir() .. "/config/" .. config_file_name .. ".php"
 
   if not fs.path_exists(config_file_path) or fs.is_dir(config_file_path) then
     log.warn("Config file '%s' not found.", config_file_path)

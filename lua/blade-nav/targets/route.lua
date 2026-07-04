@@ -131,7 +131,7 @@ function M.get_target(context)
   if #found_keys_to_route >= 1 then
     local key_info = found_keys_to_route[1]
     return {
-      type = "to_route",
+      type = "route",
       name = key_info,
     }
   end

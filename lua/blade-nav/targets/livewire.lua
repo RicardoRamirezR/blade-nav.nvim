@@ -2,10 +2,23 @@
 
 local fs = require("blade-nav.utils.fs")
 local log = require("blade-nav.utils.log")
+local shared = require("blade-nav.targets.shared")
 local string_utils = require("blade-nav.utils.string")
 local treesitter = require("blade-nav.utils.treesitter")
 
 local M = {}
+
+--- Pascal-cases each dot segment of a component identifier.
+--- e.g. "admin.user-list" -> "Admin/UserList"
+--- @param name string
+--- @return string
+local function pascal_case_path(name)
+  local segments = vim.split(name, ".", { plain = true })
+  for i, segment in ipairs(segments) do
+    segments[i] = string_utils.kebab_to_pascal(segment)
+  end
+  return table.concat(segments, "/")
+end
 
 function M.get_capabilities()
   return {
@@ -87,37 +100,27 @@ function M.get_target(context)
     return nil
   end
 
-  local pascal_case_name = string_utils.kebab_to_pascal(normalized_component_name)
+  local pascal_path = pascal_case_path(normalized_component_name)
   local kebab_case_name = normalized_component_name
+  local root = fs.get_root_dir()
 
   local potential_paths = {
-    string.format("app/Livewire/%s.php", pascal_case_name:gsub("%.", "/")),
-    string.format("app/Http/Livewire/%s.php", pascal_case_name:gsub("%.", "/")),
-    string.format("resources/views/livewire/%s.blade.php", kebab_case_name:gsub("%.", "/")),
+    string.format("%s/app/Livewire/%s.php", root, pascal_path),
+    string.format("%s/app/Http/Livewire/%s.php", root, pascal_path),
+    string.format("%s/resources/views/livewire/%s.blade.php", root, kebab_case_name:gsub("%.", "/")),
   }
 
   log.debug("Calculated potential paths for '%s': %s", normalized_component_name, vim.inspect(potential_paths))
 
-  local existing_paths = {}
-  for _, path in ipairs(potential_paths) do
-    if fs.path_exists(path) and not fs.is_dir(path) then
-      table.insert(existing_paths, path)
-      log.debug("Found existing Livewire file: %s", path)
-    else
-      log.debug("Livewire file does not exist: %s", path)
-    end
-  end
-
-  local final_choices = {}
-  if #existing_paths > 0 then
-    log.debug("Found %d existing Livewire file(s). Returning them.", #existing_paths)
-    final_choices = existing_paths
-  else
+  local final_choices, found_existing = shared.existing_or_all(fs, potential_paths)
+  if not found_existing then
     log.debug("No existing Livewire files found. Returning potential paths and creation command.")
-    for _, path in ipairs(potential_paths) do
-      table.insert(final_choices, path)
-    end
-    table.insert(final_choices, string.format("php artisan make:livewire %s", pascal_case_name))
+    table.insert(final_choices, {
+      label = string.format("php artisan make:livewire %s", pascal_path),
+      cmd = { "php", "artisan", "make:livewire", pascal_path },
+    })
+  else
+    log.debug("Found %d existing Livewire file(s). Returning them.", #final_choices)
   end
 
   local result = {
@@ -132,10 +135,6 @@ end
 
 -- The resolve function is no needed/used by the core system
 -- because targets/init.lua handles single choices and delegates multiples to show_choices.
-M.resolve = function(target_info)
-  -- No-op or log if called unexpectedly
-  log.warn("Directive handler resolve function called unexpectedly. Target info: %s", vim.inspect(target_info))
-  return false
-end
+M.resolve = shared.noop_resolve("Livewire")
 
 return M

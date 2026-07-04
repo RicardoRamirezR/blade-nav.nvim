@@ -3,6 +3,7 @@
 local config_module = require("blade-nav.core.config")
 local fs = require("blade-nav.utils.fs")
 local log = require("blade-nav.utils.log")
+local shared = require("blade-nav.targets.shared")
 local treesitter = require("blade-nav.utils.treesitter")
 
 local M = {}
@@ -63,24 +64,22 @@ function M.get_target(context)
 
   log.debug("Navigable directive '%s' found with params: %s", directive_name, vim.inspect(params))
 
-  local view_dirs_to_check = { STANDARD_VIEW_DIR }
+  local root = fs.get_root_dir()
+  local view_dirs_to_check = { root .. "/" .. STANDARD_VIEW_DIR }
   local config = config_module.get()
 
-  local user_laravel_components_paths = config.laravel_components_paths or config.laravel_components or {}
+  local user_laravel_components_paths = config.laravel_components_paths or {}
 
   if type(user_laravel_components_paths) == "table" then
     for _, user_path in ipairs(user_laravel_components_paths) do
       if type(user_path) == "string" and user_path ~= "" then
         local normalized_path = user_path:gsub("/+$", "") .. "/"
-        table.insert(view_dirs_to_check, normalized_path)
+        table.insert(view_dirs_to_check, root .. "/" .. normalized_path)
         log.debug("Added user-defined path to search list: %s", normalized_path)
       end
     end
   else
-    log.debug(
-      "laravel_components_paths/laravel_components in config is not a table: %s",
-      type(user_laravel_components_paths)
-    )
+    log.debug("laravel_components_paths in config is not a table: %s", type(user_laravel_components_paths))
   end
 
   log.debug("Final view directories to check: %s", vim.inspect(view_dirs_to_check))
@@ -93,21 +92,9 @@ function M.get_target(context)
       if not first_raw_name then
         first_raw_name = param_element
       end
-      if param_element:find("::", 1, true) then
-        local namespace, view_part = param_element:match("^([^:]+)::(.+)$")
-        if namespace and view_part then
-          local rel = view_part:gsub("%.", "/") .. ".blade.php"
-          local vendor_path = STANDARD_VIEW_DIR .. "vendor/" .. namespace .. "/" .. rel
-          table.insert(all_calculated_paths, vendor_path)
-          log.debug("Calculated vendor path for '%s': %s", param_element, vendor_path)
-        end
-      else
-        local normalized_relative_path = param_element:gsub("%.", "/") .. ".blade.php"
-        for _, view_dir in ipairs(view_dirs_to_check) do
-          local full_path = view_dir .. normalized_relative_path
-          table.insert(all_calculated_paths, full_path)
-          log.debug("Calculated potential path for argument %d ('%s') in '%s': %s", i, param_element, view_dir, full_path)
-        end
+      local candidates = shared.build_view_paths(param_element, view_dirs_to_check, ".blade.php")
+      for _, candidate in ipairs(candidates) do
+        table.insert(all_calculated_paths, candidate)
       end
     else
       log.debug(
@@ -124,22 +111,11 @@ function M.get_target(context)
     return nil
   end
 
-  local existing_paths = {}
-  for _, path in ipairs(all_calculated_paths) do
-    if fs.path_exists(path) and not fs.is_dir(path) then
-      table.insert(existing_paths, path)
-      log.debug("Found existing view file: %s", path)
-    else
-      log.debug("View file does not exist or is a directory: %s", path)
-    end
-  end
-
-  local final_choices = (#existing_paths > 0) and existing_paths or all_calculated_paths
+  local final_choices = shared.existing_or_all(fs, all_calculated_paths)
 
   log.debug(
-    "Directive '%s' check complete. Existing files: %d. Total potentials: %d. Returning %d choice(s).",
+    "Directive '%s' check complete. Total potentials: %d. Returning %d choice(s).",
     directive_name,
-    #existing_paths,
     #all_calculated_paths,
     #final_choices
   )
@@ -156,10 +132,6 @@ end
 
 -- The resolve function is no longer needed/used by the core system
 -- because targets/init.lua handles single choices and delegates multiples to show_choices.
-M.resolve = function(target_info)
-  -- No-op or log if called unexpectedly
-  log.warn("Directive handler resolve function called unexpectedly. Target info: %s", vim.inspect(target_info))
-  return false
-end
+M.resolve = shared.noop_resolve("Directive")
 
 return M

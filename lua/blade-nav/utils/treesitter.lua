@@ -187,11 +187,26 @@ end
 --- @return string|nil The extracted component name or nil if not found.
 function M.extract_component(line_text, target_name)
   log.debug("Extracting component names from line: %s, target: %s", line_text, target_name)
-  local parser = vim.treesitter.get_string_parser(line_text, "html")
-  local tree = parser:parse()[1]
+
+  local ok_parser, parser = pcall(vim.treesitter.get_string_parser, line_text, "html")
+  if not ok_parser or not parser then
+    log.debug("TS HTML parser creation failed for line: %s. Error: %s", line_text, tostring(parser))
+    return nil
+  end
+
+  local ok_tree, tree = pcall(function()
+    return parser:parse()[1]
+  end)
+  if not ok_tree or not tree then
+    log.debug("TS HTML parsing failed for line: %s. Error: %s", line_text, tostring(tree))
+    return nil
+  end
   local root = tree:root()
 
-  local query = vim.treesitter.query.parse(
+  local escaped_target_name = vim.fn.escape(target_name, '"')
+
+  local ok_query, query = pcall(
+    vim.treesitter.query.parse,
     "html",
     string.format(
       [[
@@ -211,12 +226,16 @@ function M.extract_component(line_text, target_name)
       ((self_closing_tag (tag_name) @tag_name)
        (#match? @tag_name "%s"))
     ]],
-      target_name,
-      target_name,
-      target_name,
-      target_name
+      escaped_target_name,
+      escaped_target_name,
+      escaped_target_name,
+      escaped_target_name
     )
   )
+  if not ok_query or not query then
+    log.debug("TS HTML query parsing failed for target '%s'. Error: %s", target_name, tostring(query))
+    return nil
+  end
 
   local current_tag = nil
   local parts = {}
@@ -237,6 +256,72 @@ function M.extract_component(line_text, target_name)
   end
 
   return current_tag
+end
+
+--- Extracts the Nth string argument of a scoped call expression, e.g. the
+--- view name (2nd arg) of `Route::view('/uri', 'view.name')`.
+--- @param php_code string PHP snippet (may omit the leading `<?php`).
+--- @param scope string Scope/class name, e.g. "Route".
+--- @param method string Method name, e.g. "view".
+--- @param arg_index integer 1-based argument position to return.
+--- @return string|nil The extracted argument text, or nil if not found.
+function M.extract_scoped_call_arg(php_code, scope, method, arg_index)
+  if not php_code:match("^%s*<%?php") then
+    php_code = "<?php " .. php_code
+  end
+
+  local ok_parser, parser = pcall(vim.treesitter.get_string_parser, php_code, "php")
+  if not ok_parser or not parser then
+    log.debug("TS PHP parser creation failed for scoped call extraction: %s", tostring(parser))
+    return nil
+  end
+
+  local ok_tree, tree = pcall(function()
+    return parser:parse()[1]
+  end)
+  if not ok_tree or not tree then
+    log.debug("TS PHP parsing failed for scoped call extraction: %s", tostring(tree))
+    return nil
+  end
+
+  local ok_query, query = pcall(
+    vim.treesitter.query.parse,
+    "php",
+    string.format(
+      [[
+        (scoped_call_expression
+          scope: (name) @scope
+          name: (name) @method
+          arguments: (arguments
+            (argument (string (string_content) @arg))*)
+          (#eq? @scope "%s")
+          (#eq? @method "%s"))
+      ]],
+      scope,
+      method
+    )
+  )
+  if not ok_query or not query then
+    log.debug("TS PHP query parsing failed for scoped call extraction: %s", tostring(query))
+    return nil
+  end
+
+  local args = {}
+  for _, match in query:iter_matches(tree:root(), php_code) do
+    for id, nodes in pairs(match) do
+      if query.captures[id] == "arg" then
+        for _, node in ipairs(nodes) do
+          table.insert(args, node)
+        end
+      end
+    end
+  end
+
+  if args[arg_index] then
+    return vim.treesitter.get_node_text(args[arg_index], php_code)
+  end
+
+  return nil
 end
 
 function M.extract_php_function_keys(php_code, target_fn)

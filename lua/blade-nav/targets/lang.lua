@@ -33,11 +33,18 @@ local function strip_bom(text)
   return text
 end
 
--- Scan resources/lang recursively and return full candidate files.
--- Each entry: { locale = "en", path = "/full/path/to/resources/lang/..." }
+-- Scan the lang directory recursively and return full candidate files.
+-- Laravel 9+ moved translations to a root-level `lang/`; older apps keep
+-- them under `resources/lang/`.
+-- Each entry: { path = "/full/path/to/lang/..." }
 local function get_available_locale_files()
   local results = {}
-  local lang_dir = fs.get_root_dir() .. "/resources/lang"
+  local root = fs.get_root_dir()
+  local lang_dir = root .. "/lang"
+
+  if not file_exists(lang_dir) then
+    lang_dir = root .. "/resources/lang"
+  end
 
   if not file_exists(lang_dir) then
     return results
@@ -59,16 +66,7 @@ local function get_available_locale_files()
       if t == "directory" then
         scan_dir(full_path)
       elseif name:match("%.php$") or name:match("%.json$") then
-        -- detect a locale-ish segment from path parts (best-effort)
-        local parts = vim.split(full_path, "/")
-        local locale = nil
-        for _, segment in ipairs(parts) do
-          if segment:match("^[%a_%-]+$") and #segment <= 8 then
-            -- heuristic: short alpha/underscore/hyphen segment
-            locale = segment
-          end
-        end
-        table.insert(results, { locale = locale or "unknown", path = fs.abs_path(full_path) })
+        table.insert(results, { path = fs.abs_path(full_path) })
       end
     end
   end
@@ -90,16 +88,19 @@ local function json_key_exists(filepath, key)
     return data[key] ~= nil
   end
 
-  local esc_key = vim.fn.escape(key, "\\/.*$^~[]")
+  local escape_set = "\\/.*$^~[]()+?{}|=<>@&%"
+  local esc_key = vim.fn.escape(key, escape_set)
   local pattern = '\\v"' .. esc_key .. '"\\s*:'
-  if vim.fn.match(text, pattern) >= 0 then
+  local ok_match, result = pcall(vim.fn.match, text, pattern)
+  if ok_match and result >= 0 then
     return true
   end
 
   local lower_text = vim.fn.tolower(text)
   local lower_key = vim.fn.tolower(key)
-  local pattern_ci = '\\v"' .. vim.fn.escape(lower_key, "\\/.*$^~[]") .. '"\\s*:'
-  return vim.fn.match(lower_text, pattern_ci) >= 0
+  local pattern_ci = '\\v"' .. vim.fn.escape(lower_key, escape_set) .. '"\\s*:'
+  local ok_match_ci, result_ci = pcall(vim.fn.match, lower_text, pattern_ci)
+  return ok_match_ci and result_ci >= 0
 end
 
 -- Key existence checks php
@@ -195,9 +196,9 @@ local function navigate_to_php_key(filepath, key_name)
     return
   end
 
-  local pattern = string.format("[\"']%s[\"']%s*=>", vim.fn.escape(key_name, "\"'"), "%s*")
-  local line_num = vim.fn.search(pattern, "nw")
-  if line_num > 0 then
+  local pattern = string.format("[\"']%s[\"']\\s*=>", vim.fn.escape(key_name, "\"'"))
+  local ok_search, line_num = pcall(vim.fn.search, pattern, "nw")
+  if ok_search and line_num > 0 then
     vim.api.nvim_win_set_cursor(0, { line_num, 0 })
     vim.cmd("normal! zz")
   else
@@ -242,7 +243,6 @@ function M.resolve(target_info)
       if entry.path:match("%.json$") then
         local has_key = json_key_exists(entry.path, target_info.name)
         table.insert(all_files, {
-          locale = entry.locale,
           path = entry.path,
           has_key = has_key,
           display = (has_key and "✓ " or "✗ ") .. fs.project_relative(entry.path),
@@ -259,7 +259,6 @@ function M.resolve(target_info)
         if base == file_name then
           local has_key = php_key_exists(entry.path, key_name)
           table.insert(all_files, {
-            locale = entry.locale,
             path = entry.path,
             has_key = has_key,
             display = (has_key and "✓ " or "✗ ") .. fs.project_relative(entry.path),

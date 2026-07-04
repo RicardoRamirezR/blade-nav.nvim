@@ -26,6 +26,7 @@ local function extract_page_name_from_buffer()
   if bufname == "" then
     return nil
   end
+  bufname = vim.fs.normalize(bufname)
 
   local root = fs.get_root_dir()
   local rel = bufname:gsub("^" .. vim.pesc(root) .. "/", "")
@@ -142,7 +143,11 @@ end
 
 local function watch_app_file()
   if app_watcher then
-    return
+    pcall(function()
+      app_watcher:stop()
+      app_watcher:close()
+    end)
+    app_watcher = nil
   end
 
   local root = fs.get_root_dir()
@@ -199,20 +204,51 @@ end
 local function get_path(page_name)
   local path = resolve_pages_path()
 
-  page_name = page_name:gsub("['()%)]", "")
+  page_name = page_name:gsub("[%s\"'()]", "")
   page_name = page_name:gsub("%.", "/")
 
   local config = require("blade-nav.core.config")
   local extensions = config.get("inertia_extensions") or { "vue", "tsx", "jsx", "ts" }
 
+  local root = fs.get_root_dir()
   for _, ext in ipairs(extensions) do
-    local file_path = "resources/js/" .. path .. "/" .. page_name .. "." .. ext
+    local file_path = root .. "/resources/js/" .. path .. "/" .. page_name .. "." .. ext
     if vim.fn.filereadable(file_path) == 1 then
       return file_path
     end
   end
 
-  return "resources/js/" .. path .. "/" .. page_name .. "." .. extensions[1]
+  return root .. "/resources/js/" .. path .. "/" .. page_name .. "." .. extensions[1]
+end
+
+local ERE_SPECIAL_CHARS = {
+  ["."] = true,
+  ["^"] = true,
+  ["$"] = true,
+  ["*"] = true,
+  ["+"] = true,
+  ["?"] = true,
+  ["("] = true,
+  [")"] = true,
+  ["["] = true,
+  ["]"] = true,
+  ["{"] = true,
+  ["}"] = true,
+  ["|"] = true,
+  ["\\"] = true,
+}
+
+--- Escapes ERE (extended regular expression) metacharacters for use in an
+--- `rg`/`grep -E` pattern.
+--- @param str string
+--- @return string
+local function escape_ere(str)
+  return (str:gsub(".", function(c)
+    if ERE_SPECIAL_CHARS[c] then
+      return "\\" .. c
+    end
+    return c
+  end))
 end
 
 local function find_controller_for_page(page_name)
@@ -221,10 +257,10 @@ local function find_controller_for_page(page_name)
   local slash_name = page_name:gsub("%.", "/")
 
   local pattern = table.concat({
-    "inertia\\(.*['\"]" .. vim.pesc(slash_name),
-    "inertia\\(.*['\"]" .. vim.pesc(dot_name),
-    "Inertia::render\\(.*['\"]" .. vim.pesc(slash_name),
-    "Inertia::render\\(.*['\"]" .. vim.pesc(dot_name),
+    "inertia\\(.*['\"]" .. escape_ere(slash_name),
+    "inertia\\(.*['\"]" .. escape_ere(dot_name),
+    "Inertia::render\\(.*['\"]" .. escape_ere(slash_name),
+    "Inertia::render\\(.*['\"]" .. escape_ere(dot_name),
   }, "|")
 
   local grep_cmd

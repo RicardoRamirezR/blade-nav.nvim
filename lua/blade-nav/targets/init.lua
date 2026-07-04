@@ -12,18 +12,6 @@ M._handler_modules = {}
 M._failed_handlers = {}
 M._handler_capabilities = {}
 
-local function normalize_choices(choices)
-  local normalized = {}
-  for i, choice in ipairs(choices) do
-    if tostring(choice):match("^" .. i .. ": ") then
-      table.insert(normalized, choice)
-    else
-      table.insert(normalized, i .. ": " .. choice)
-    end
-  end
-  return normalized
-end
-
 --- Register a target handler after it's required.
 --- @param name string
 --- @param handler table
@@ -165,7 +153,7 @@ local function discover_handlers(handler_dir_path)
 
   local name, ftype = uv.fs_scandir_next(handle)
   while name do
-    if ftype == "file" and name:match("%.lua$") and name ~= "init.lua" then
+    if ftype == "file" and name:match("%.lua$") and name ~= "init.lua" and name ~= "shared.lua" then
       local handler_name = name:gsub("%.lua$", "")
       table.insert(handler_names, handler_name)
       log.debug("Discovered handler: %s", handler_name)
@@ -187,7 +175,7 @@ function M.load_handlers(handler_module_base, handler_dir_path, config)
   M._handler_order = {}
   M._handler_modules = {}
   M._handler_capabilities = {}
-  M._failed_handlers = M._failed_handlers or {}
+  M._failed_handlers = {}
 
   if not handler_dir_path then
     local init_script_path = debug.getinfo(1, "S").source:sub(2)
@@ -262,6 +250,9 @@ function M.resolve_target(context)
       local rok, rres = pcall(handler.resolve, result)
       if rok and rres == true then
         return true
+      end
+      if not rok then
+        log.error("Handler '%s' resolve error: %s", name, tostring(rres))
       end
     end
 

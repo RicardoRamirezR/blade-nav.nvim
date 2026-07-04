@@ -1,6 +1,7 @@
 -- lua/blade-nav/targets/component.lua
 
 local log = require("blade-nav.utils.log")
+local shared = require("blade-nav.targets.shared")
 local treesitter = require("blade-nav.utils.treesitter")
 local laravel = require("blade-nav.utils.laravel")
 
@@ -67,18 +68,6 @@ end
 --- Resolves the component target.
 --- @param target_info BladeNavTargetInfo The target info returned by get_target.
 --- @return boolean True if successfully opened/action taken, false otherwise.
-function M.resolve(target_info)
-  if not target_info or target_info.type ~= "component" then
-    log.warn("component resolve called with invalid target_info: %s", vim.inspect(target_info))
-    return false
-  end
-
-  log.debug(
-    "component resolve called for target: %s. This handler relies on core system resolution via choices.",
-    target_info.name or "unknown"
-  )
-
-  return false
-end
+M.resolve = shared.noop_resolve("Component")
 
 return M
