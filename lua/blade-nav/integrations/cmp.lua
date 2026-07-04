@@ -108,6 +108,8 @@ function M.setup(opts)
     callback(result)
   end
 
+  local warned_config_fallback = false
+
   --- Resolves the sources already configured for a filetype (falling back to
   --- the global sources) without clobbering the other filetype's config.
   --- @param ft string
@@ -120,6 +122,12 @@ function M.setup(opts)
     end
     if ok_internal and cmp_config.global and cmp_config.global.sources then
       return cmp_config.global.sources
+    end
+    if not warned_config_fallback then
+      warned_config_fallback = true
+      log.warn(
+        "nvim-cmp internal config API unavailable; per-filetype sources may be merged from the active buffer's config"
+      )
     end
     return cmp.get_config().sources or {}
   end
