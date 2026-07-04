@@ -25,6 +25,7 @@ local DEFAULT_CFG = {
 local config = {}
 local render_debounced
 local cancel_render_debounced
+local rendered_bufs = {}
 
 local function for_each_web_buffer(cb)
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
@@ -38,6 +39,7 @@ function M.toggle_show()
   config.show = not config.show
   if config.show then
     for_each_web_buffer(function(b)
+      rendered_bufs[b] = true
       renderer.render_buffer(b, true)
     end)
     log.debug("Values enabled")
@@ -104,7 +106,10 @@ function M.setup()
   vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
     group = grp,
     callback = function(args)
-      if vim.tbl_contains(WEB_FILETYPES, vim.bo[args.buf].filetype) then
+      if
+          vim.tbl_contains(WEB_FILETYPES, vim.bo[args.buf].filetype)
+          and (config.show_on_load or rendered_bufs[args.buf])
+      then
         render_debounced(args.buf)
       end
     end,
@@ -114,6 +119,7 @@ function M.setup()
     group = grp,
     callback = function(args)
       if vim.tbl_contains(WEB_FILETYPES, vim.bo[args.buf].filetype) then
+        rendered_bufs[args.buf] = true
         render_debounced(args.buf)
       end
     end,
@@ -130,6 +136,7 @@ function M.setup()
   vim.api.nvim_create_autocmd("BufDelete", {
     group = grp,
     callback = function(args)
+      rendered_bufs[args.buf] = nil
       local queue = renderer.get_processing_queue()
       for i = #queue, 1, -1 do
         if queue[i].bufnr == args.buf then
