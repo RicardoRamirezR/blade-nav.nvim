@@ -108,6 +108,7 @@ local function find_views()
 end
 
 -- stylua: ignore start
+-- luacheck: push ignore 631
 local PATTERNS = {
   { pattern = "to_route%("        , tpl = "to_route('%s')"          , ft = { "blade" , "php" }, fn = find_routes     , kind = "route"     },
   { pattern = "route%("           , tpl = "route('%s')"             , ft = { "blade" , "php" }, fn = find_routes     , kind = "route"     },
@@ -129,6 +130,7 @@ local PATTERNS = {
   { pattern = "__%("              , tpl = "__('%s')"                , ft = { "blade" , "php" }, fn = find_lang       , kind = "lang"      },
   { pattern = "trans%("            , tpl = "trans('%s')"              , ft = { "blade" , "php" }, fn = find_lang       , kind = "lang"      },
 }
+-- luacheck: pop
 -- stylua: ignore end
 
 --- Get all view names

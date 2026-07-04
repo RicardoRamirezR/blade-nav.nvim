@@ -1,7 +1,6 @@
 -- lua/blade-nav/integrations/cmp.lua
 
 local log = require("blade-nav.utils.log")
-local utils = require("blade-nav.utils")
 local tbl = require("blade-nav.utils.table")
 local laravel = require("blade-nav.utils.laravel")
 local str = require("blade-nav.utils.string")

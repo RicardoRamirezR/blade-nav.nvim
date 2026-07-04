@@ -82,12 +82,12 @@ describe("fs.find_files", function()
 
   it("finds files with find branch", function()
     -- Mock to force using find even if fd is available
-    local real_command_exists = fs.command_exists
-    fs.command_exists = function(cmd)
-      if cmd == "fd" then
+    local original_command_exists = fs.command_exists
+    fs.command_exists = function(bin_name)
+      if bin_name == "fd" then
         return false
       end
-      return real_command_exists(cmd)
+      return original_command_exists(bin_name)
     end
 
     local files = fs.find_files(tmpdir, "blade.php")
@@ -96,17 +96,17 @@ describe("fs.find_files", function()
     assert.is_true(vim.tbl_contains(files, tmpdir .. "/views/about.blade.php"))
 
     -- Restore original function
-    fs.command_exists = real_command_exists
+    fs.command_exists = original_command_exists
   end)
 
   it("respects exclude_dirs", function()
     local has_fd = fs.command_exists("fd")
 
     -- Mock to ensure consistent behavior regardless of fd availability
-    local real_command_exists = fs.command_exists
-    fs.command_exists = function(cmd)
+    local original_command_exists = fs.command_exists
+    fs.command_exists = function(bin_name)
       if has_fd then
-        return cmd == "fd"
+        return bin_name == "fd"
       else
         return false
       end
@@ -119,7 +119,7 @@ describe("fs.find_files", function()
     end
 
     -- Restore original function
-    fs.command_exists = real_command_exists
+    fs.command_exists = original_command_exists
   end)
 end)
 

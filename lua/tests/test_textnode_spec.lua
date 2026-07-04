@@ -20,11 +20,6 @@ local function assert_text_node(filetype, cursor, buf_text, expected_full, expec
   helpers.with_buffer(buf_text, opts, function()
     local full, name, arg = textnode.get_text_node()
 
-    local pos = vim.api.nvim_win_get_cursor(0)
-    local row = pos[1]
-
-    local line = vim.api.nvim_buf_get_lines(0, row - 1, row, false)[1]
-
     assert.equals(expected_full, full, "full mismatch")
     assert.equals(expected_name, name, "name mismatch")
     assert.equals(expected_arg, arg, "arg mismatch")

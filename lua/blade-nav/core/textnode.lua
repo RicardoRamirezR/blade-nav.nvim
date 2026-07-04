@@ -1,7 +1,9 @@
 -- lua/blade-nav/core/textnode.lua
 
 local log = require("blade-nav.utils.log")
-local unpack = table.unpack or unpack ---@diagnostic disable-line: deprecated
+-- LuaJIT has no table.unpack; fall back to the global unpack (deprecated in Lua 5.2+).
+---@diagnostic disable-next-line: deprecated
+local unpack = table.unpack or unpack -- luacheck: ignore 143
 
 local M = {}
 local ts = vim.treesitter
@@ -262,13 +264,13 @@ function M.extract_php(node, bufnr)
     return nil, nil, nil
   end
 
-  local function get_first_argument(target_node, bufnr, function_name)
+  local function get_first_argument(target_node, buf, function_name)
     for child in target_node:iter_children() do
       if child:type() == "arguments" then
         local args = {}
         for arg_child in child:iter_children() do
           if arg_child:type() ~= "(" and arg_child:type() ~= ")" and arg_child:type() ~= "," then
-            local raw_arg = node_text(arg_child, bufnr)
+            local raw_arg = node_text(arg_child, buf)
             args[#args + 1] = clean_text(raw_arg)
           end
         end
@@ -329,7 +331,7 @@ function M.extract_php(node, bufnr)
         local php_text = node_text(child, bufnr)
 
         local first_arg = php_text:match("^[%w_:]+%s*%(%s*([^,)]+)")
-        local clean_first_arg = nil
+        local clean_first_arg
         if first_arg and function_name then
           first_arg = clean_text(first_arg)
           clean_first_arg = extract_first_argument(first_arg)
@@ -477,9 +479,9 @@ local function get_text_range(bufnr, sr, sc, er, ec)
   return table.concat(out, "\n")
 end
 
--- Find matching closing parenthesis starting from directive start (returns full substring up to matching ')', and end row/col)
--- Requires '(' to immediately follow the directive name, and bounds the scan to
--- avoid walking to the end of the buffer for directives with no parameter list.
+-- Find matching closing parenthesis starting from directive start (returns full substring up to
+-- matching ')', and end row/col). Requires '(' to immediately follow the directive name, and
+-- bounds the scan to avoid walking to the end of the buffer for directives with no parameter list.
 local MAX_CLOSING_PAREN_SCAN_LINES = 50
 
 local function find_closing_paren(bufnr, start_row, start_col, name_len)
@@ -696,7 +698,7 @@ local function collect_directives(bufnr)
       elseif cap.name == "parameter" then
         if current then
           current.param_nodes[#current.param_nodes + 1] = cap.node
-          local psr, psc, per, pec = cap.node:range()
+          local _, _, per, pec = cap.node:range()
           -- keep endpos updated to last parameter end (fallback)
           current.endpos = { per, pec }
         end

@@ -1,7 +1,6 @@
 -- lua/tests/test_targets_livewire_spec.lua
 local stub = require("luassert.stub")
 local livewire = require("blade-nav.targets.livewire")
-local fs = require("blade-nav.utils.fs")
 local strutil = require("blade-nav.utils.string")
 
 describe("livewire handler", function()

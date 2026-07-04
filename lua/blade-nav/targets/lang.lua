@@ -166,7 +166,9 @@ local function navigate_to_json_key(filepath, key_name)
         )
         local ok_q, query = pcall(ts.query.parse, "json", query_str)
         if ok_q and query then
-          for _, node in query:iter_captures(root, bufnr) do
+          -- Only the first match is relevant: jump to it and stop.
+          local _, node = query:iter_captures(root, bufnr)()
+          if node then
             local start_row, start_col = node:range()
             vim.api.nvim_win_set_cursor(0, { start_row + 1, start_col })
             vim.cmd("normal! zz")

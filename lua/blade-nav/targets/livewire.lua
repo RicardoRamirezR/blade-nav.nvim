@@ -76,7 +76,7 @@ function M.get_target(context)
     return nil
   end
 
-  local component_identifier = nil
+  local component_identifier
   if context.first_arg and context.target then
     component_identifier = context.first_arg
   else

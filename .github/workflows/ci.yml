@@ -71,3 +71,27 @@ jobs:
         run: |
           echo "Running tests with neovim=${{ matrix.neovim }}, fd=${{ matrix.fd }}, treesitter=${{ matrix.treesitter }}"
           make test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stylua
+        run: |
+          curl -L -o stylua.zip https://github.com/JohnnyMorganz/StyLua/releases/download/v2.5.2/stylua-linux-x86_64.zip
+          unzip stylua.zip
+          sudo mv stylua /usr/local/bin/stylua
+          stylua --version
+
+      - name: Install luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 liblua5.1-0-dev luarocks
+          sudo luarocks install luacheck
+
+      - name: Check formatting (stylua)
+        run: stylua --check lua ftplugin scripts tests
+
+      - name: Run luacheck
+        run: luacheck lua ftplugin scripts tests

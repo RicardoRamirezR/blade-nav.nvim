@@ -1,5 +1,4 @@
 -- lua/blade-nav/utils/string.lua
-local log = require("blade-nav.utils.log")
 local tbl = require("blade-nav.utils.table")
 local M = {}
 

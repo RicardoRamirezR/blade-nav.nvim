@@ -11,18 +11,19 @@ function Source.new()
   return setmetatable({}, { __index = Source })
 end
 
-function Source:enabled()
+function Source.enabled(_)
   local ft = vim.api.nvim_get_option_value("filetype", { buf = 0 })
   return ft == "blade" or ft == "php"
 end
 
-function Source:get_trigger_characters()
+function Source.get_trigger_characters(_)
   return { ".", "<", ":", "@", "(", "'", '"' }
 end
 
+---@param _ table The source instance (self).
 ---@param ctx blink.cmp.Context
 ---@param callback fun(result?: blink.cmp.CompletionResponse)
-function Source:get_completions(ctx, callback)
+function Source.get_completions(_, ctx, callback)
   local laravel = require("blade-nav.utils.laravel")
 
   local line_before_cursor = ctx.line:sub(1, ctx.cursor[2])

@@ -47,7 +47,7 @@ function M.get_target(context)
     return nil
   end
 
-  local directive_name, params = nil, nil
+  local directive_name, params
   if context.first_arg and not vim.tbl_contains(DIRECTIVE_MULTI_PARAMS, context.target) then
     directive_name = context.target
     params = { context.first_arg }

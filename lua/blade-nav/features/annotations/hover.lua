@@ -1,7 +1,9 @@
 local M = {}
 
 local ts = vim.treesitter
-local unpack = table.unpack or unpack
+-- LuaJIT has no table.unpack; fall back to the global unpack (deprecated in Lua 5.2+).
+---@diagnostic disable-next-line: deprecated
+local unpack = table.unpack or unpack -- luacheck: ignore 143
 local log = require("blade-nav.utils.log")
 local textnode = require("blade-nav.core.textnode")
 local lang_extractor = require("blade-nav.extractors.lang")

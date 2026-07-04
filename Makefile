@@ -1,10 +1,17 @@
-.PHONY: test debug-test
+.PHONY: test debug-test lint
 
 # Version with proper exit code handling
 test:
 	@echo "Running tests..."
 	@nvim --headless -u tests/minimal_init.lua \
 		-c "PlenaryBustedDirectory lua/tests/ {minimal_init = 'tests/minimal_init.lua'}"
+
+# Format check + static analysis
+lint:
+	@echo "Running stylua --check..."
+	@stylua --check lua ftplugin scripts tests
+	@echo "Running luacheck..."
+	@luacheck lua ftplugin scripts tests
 
 # For debug - shows more information
 debug-test:

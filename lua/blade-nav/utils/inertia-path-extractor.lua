@@ -203,7 +203,7 @@ local function test_extract_pages_path()
   for _, test_case in ipairs(test_cases) do
     local result, error = extract_pages_path(test_case.content, { debug = true })
 
-    local passed = false
+    local passed
     if test_case.expected_error then
       passed = error and error.type == test_case.expected_error
     else

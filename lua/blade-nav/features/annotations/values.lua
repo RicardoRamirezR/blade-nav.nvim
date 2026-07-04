@@ -8,15 +8,15 @@ local env_extractor = require("blade-nav.extractors.env")
 local lang_extractor = require("blade-nav.extractors.lang")
 local log = require("blade-nav.utils.log")
 
-local env_map_local = nil
+local env_map = nil
 local cfg_map = nil
 local lang_map = nil
 
 local function get_env_map()
-  if not env_map_local then
-    env_map_local = env_extractor.get_map()
+  if not env_map then
+    env_map = env_extractor.get_map()
   end
-  return env_map_local
+  return env_map
 end
 
 local function get_cfg_map()
@@ -34,7 +34,7 @@ local function get_lang_map()
 end
 
 local function invalidate_maps()
-  env_map_local = nil
+  env_map = nil
   cfg_map = nil
   lang_map = nil
 end

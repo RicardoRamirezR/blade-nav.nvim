@@ -26,7 +26,7 @@ function M.get_target(context)
   if context.target and context.target ~= "component" then
     return nil
   end
-  local component_identifier = nil
+  local component_identifier
   if context.first_arg then
     component_identifier = context.first_arg
   else

@@ -76,7 +76,9 @@ local function log_raw(level_str, message)
   end)
 end
 
-local table_unpack = table.unpack or unpack
+-- LuaJIT has no table.unpack; fall back to the global unpack (deprecated in Lua 5.2+).
+---@diagnostic disable-next-line: deprecated
+local table_unpack = table.unpack or unpack -- luacheck: ignore 143
 
 local function count_format_specifiers(fmt)
   local i = 1

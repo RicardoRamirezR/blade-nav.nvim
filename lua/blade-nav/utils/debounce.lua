@@ -1,6 +1,8 @@
 -- lua/blade-nav/utils/debounce.lua
 local uv = vim.uv
-local unpack = table.unpack or unpack ---@diagnostic disable-line: deprecated
+-- LuaJIT has no table.unpack; fall back to the global unpack (deprecated in Lua 5.2+).
+---@diagnostic disable-next-line: deprecated
+local unpack = table.unpack or unpack -- luacheck: ignore 143
 
 local M = {}
 

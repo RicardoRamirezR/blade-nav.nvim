@@ -32,7 +32,6 @@ describe("Extra Laravel utils", function()
   --
   it("invalidates cache directly", function()
     cache.set("route_list:foo", { foo = "dummy" })
-    local laravel = require("blade-nav.utils.laravel")
 
     -- directly call the internal helper
     laravel.invalidate_routes_cache()

@@ -1,7 +1,6 @@
 -- lua/tests/test_targets_component_spec.lua
 local stub = require("luassert.stub")
 local comp = require("blade-nav.targets.component")
-local fs = require("blade-nav.utils.fs")
 local laravel = require("blade-nav.utils.laravel")
 
 describe("component handler", function()

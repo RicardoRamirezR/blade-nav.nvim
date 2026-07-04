@@ -8,7 +8,8 @@ local M = {}
 --- Builds view/include file candidate path(s) for a dot-notated (optionally
 --- namespaced) view name, e.g. "user.profile" or "vendor::pkg.view".
 --- @param raw_name string
---- @param dirs string[] Base directories to check for non-namespaced names, each ending in "/". dirs[1] is used as the vendor root.
+--- @param dirs string[] Base directories to check for non-namespaced names, each ending in "/".
+--- dirs[1] is used as the vendor root.
 --- @param ext string File extension suffix, e.g. ".blade.php".
 --- @return string[] candidate paths
 function M.build_view_paths(raw_name, dirs, ext)
