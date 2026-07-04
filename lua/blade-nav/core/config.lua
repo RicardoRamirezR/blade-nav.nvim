@@ -5,9 +5,14 @@ local cache = {}
 
 local schema = {
   enable = "boolean",
+  force_enable = "boolean",
   cache_timeout = "number",
   debug = "boolean",
   jsconfig_path = "string",
+  close_tag_on_complete = "boolean",
+  include_routes_in_cmp = "boolean",
+  inertia_pages_path = "string",
+  inertia_extensions = "table",
   laravel_components_paths = "table",
   handlers = "table",
   integrations = "table",
@@ -27,7 +32,7 @@ local function validate(config)
 end
 
 -- @class BladeNavConfig
--- @field cache_timeout integer Timeout for cached data in milliseconds (default: 5000)
+-- @field cache_timeout integer Timeout for cached data in milliseconds (default: 50000)
 -- @field debug boolean Enable debug logging (default: false)
 -- @field jsconfig_path string Path to jsconfig.json (default: "./jsconfig.json")
 -- @field laravel_components_paths table List of additional component search paths (default: {})
@@ -38,6 +43,7 @@ end
 --- @type BladeNavConfig
 local default_config = {
   enable = true,
+  force_enable = false,
   cache_timeout = 50000,
   debug = false,
   jsconfig_path = "./jsconfig.json",
@@ -55,13 +61,12 @@ local default_config = {
     component = true,
     inertia = true,
     vue = true,
+    lang = true,
   },
   integrations = {
-    blink = true,
     cmp = true,
     coq = true,
     gf = true,
-    health = true,
   },
   annotations = {
     show = false,
@@ -120,14 +125,18 @@ local function merge_config_with_legacy(user_opts)
 end
 
 --- Setup and merge user configuration.
+--- Subsequent calls with explicit options re-merge (runtime reconfiguration);
+--- subsequent calls with no arguments return the cached config unchanged.
 --- @param user_config? BladeNavConfig User provided configuration options.
+--- @return BladeNavConfig
 function M.setup(user_config)
-  if cache.merged then
+  if cache.merged and user_config == nil then
     return cache.merged
   end
 
   cache.merged = merge_config_with_legacy(user_config)
   validate(cache.merged)
+  return cache.merged
 end
 
 --- Get the current configuration.
@@ -135,22 +144,16 @@ end
 --- @return BladeNavConfig|any
 function M.get(key)
   if key then
-    return cache.merged[key]
+    return cache.merged and cache.merged[key]
   end
 
   return cache.merged or {}
 end
 
 function M.set(key, value)
-  cache.merged[key] = value
-end
-
-function M.disableDebug()
-  cache.merged.debug = false
-end
-
-function M.enableDebug()
-  cache.merged.debug = true
+  if cache.merged then
+    cache.merged[key] = value
+  end
 end
 
 return M

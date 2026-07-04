@@ -9,7 +9,7 @@ local M = {}
 --- @return BladeNavTargetInfo | nil
 function M.resolve(context)
   log.debug("Starting resolution process.")
-  for _, handler_name in ipairs(targets._handler_order) do
+  for _, handler_name in ipairs(targets.get_compatible_handlers(context)) do
     local handler = targets._handlers[handler_name]
     if handler and type(handler.get_target) == "function" then
       local ok, result = pcall(handler.get_target, context)

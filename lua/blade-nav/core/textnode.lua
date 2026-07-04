@@ -8,8 +8,8 @@ local ts = vim.treesitter
 
 local TARGET_LISTS = {
   php = {
-    "Config::get()",
-    "Config::set()",
+    "Config::get",
+    "Config::set",
     "Inertia::render",
     "Route::view",
     "View::make",
@@ -33,17 +33,15 @@ local TARGET_LISTS = {
     "@includeIf",
     "@include",
   },
-  component = {},
-  livewire = {},
 }
 
 local function is_target(name, interest_type)
-  if interest_type == "component" then
-    return true
-  end
-
   if not name or not interest_type then
     return false
+  end
+
+  if interest_type == "component" then
+    return name:match("^x%-") ~= nil or name:match("^livewire:") ~= nil
   end
 
   local list = TARGET_LISTS[interest_type]
@@ -82,7 +80,8 @@ local function clean_text(text)
   if not text then
     return nil
   end
-  return text:gsub("[\r\n]+", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
+  local cleaned = text:gsub("[\r\n]+", " "):gsub("%s+", " "):gsub("^%s*(.-)%s*$", "%1")
+  return cleaned
 end
 
 local function extract_first_argument(text)
@@ -124,22 +123,22 @@ end
 local function safe_get_node_at_cursor(bufnr)
   local ft = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
   if not ft or ft == "" then
-    vim.notify("No filetype detected", vim.log.levels.WARN)
+    log.debug("No filetype detected")
     return nil
   end
 
   local ok, parser = pcall(ts.get_parser, bufnr, ft)
   if not ok or not parser then
-    vim.notify("No parser available for buffer", vim.log.levels.WARN)
+    log.debug("No parser available for buffer")
     return nil
   end
 
   local row, col = get_cursor_pos()
   local ok2, node = pcall(function()
-    if ts.get_node_at_pos then
-      return ts.get_node_at_pos(bufnr, row, col, {})
-    elseif ts.get_node then
+    if ts.get_node then
       return ts.get_node({ bufnr = bufnr, pos = { row, col } })
+    elseif ts.get_node_at_pos then
+      return ts.get_node_at_pos(bufnr, row, col, {})
     else
       local tree = parser:parse()[1]
       return tree and tree:root():descendant_for_range(row, col, row, col)
@@ -147,7 +146,7 @@ local function safe_get_node_at_cursor(bufnr)
   end)
 
   if not ok2 then
-    vim.notify("Error getting node: " .. tostring(node), vim.log.levels.ERROR)
+    log.debug("Error getting node: %s", tostring(node))
     return nil
   end
 
@@ -235,34 +234,6 @@ local function extract_function_name_from_php_only(php_only_node, bufnr)
   return function_name
 end
 
-local function find_interesting_php_parent(start_node, bufnr)
-  local current = start_node:parent()
-
-  while current do
-    if vim.tbl_contains({ "function_call_expression", "scoped_call_expression" }, current:type()) then
-      local _, function_name, _ = M.extract_php(current, bufnr)
-      if function_name and is_target(function_name, "php") then
-        return current
-      end
-    end
-
-    if current:type() == "php_statement" then
-      for child in current:iter_children() do
-        if child:type() == "php_only" then
-          local function_name = extract_function_name_from_php_only(child, bufnr)
-          if function_name and is_target(function_name, "php") then
-            return current
-          end
-        end
-      end
-    end
-
-    current = current:parent()
-  end
-
-  return nil
-end
-
 function M.set_target_lists(lists)
   if lists.php then
     TARGET_LISTS.php = lists.php
@@ -270,24 +241,24 @@ function M.set_target_lists(lists)
   if lists.directive then
     TARGET_LISTS.directive = lists.directive
   end
-  if lists.component then
-    TARGET_LISTS.component = lists.component
-  end
 end
 
 function M.get_target_lists()
   return TARGET_LISTS
 end
 
---- Extract function name from php_only node
---- @param php_only_node TSNode The php_only node
+--- Extract PHP function/method call info starting from the node at the cursor.
+--- Walks up once to the nearest interesting ancestor (function/scoped call, or a
+--- php_only statement); if that call isn't itself a recognized target, continues
+--- walking up the same chain looking for an enclosing call that is.
+--- @param node TSNode Tree-sitter node at cursor position
 --- @param bufnr integer Buffer number
 --- @return string|nil, string|nil, string|nil complete node text, function name, first argument
 function M.extract_php(node, bufnr)
-  node = find_parent(node, function(n)
+  local start_node = find_parent(node, function(n)
     return vim.tbl_contains({ "php_statement", "function_call_expression", "scoped_call_expression" }, n:type())
   end)
-  if not node then
+  if not start_node then
     return nil, nil, nil
   end
 
@@ -326,7 +297,7 @@ function M.extract_php(node, bufnr)
       end
 
       local first_arg, clean_first_arg = get_first_argument(target_node, bufnr, function_name)
-      if first_arg then
+      if first_arg and function_name then
         return function_name .. "(" .. first_arg .. ")", function_name, clean_first_arg
       else
         return clean_text(node_text(target_node, bufnr)), function_name, nil
@@ -345,7 +316,7 @@ function M.extract_php(node, bufnr)
       end
 
       local first_arg, clean_first_arg = get_first_argument(target_node, bufnr, function_name)
-      if first_arg then
+      if first_arg and function_name then
         return function_name .. "(" .. first_arg .. ")", function_name, clean_first_arg
       else
         return clean_text(node_text(target_node, bufnr)), function_name, nil
@@ -359,7 +330,7 @@ function M.extract_php(node, bufnr)
 
         local first_arg = php_text:match("^[%w_:]+%s*%(%s*([^,)]+)")
         local clean_first_arg = nil
-        if first_arg then
+        if first_arg and function_name then
           first_arg = clean_text(first_arg)
           clean_first_arg = extract_first_argument(first_arg)
           return function_name .. "(" .. first_arg .. ")", function_name, clean_first_arg
@@ -372,26 +343,57 @@ function M.extract_php(node, bufnr)
     return nil, nil, nil
   end
 
-  local text, function_name, first_arg = extract_from_node(node)
+  local text, function_name, first_arg = extract_from_node(start_node)
 
-  if function_name and not is_target(function_name, "php") then
-    local parent_node = find_interesting_php_parent(node, bufnr)
-    if parent_node then
-      local parent_text, parent_function_name, parent_first_arg = extract_from_node(parent_node)
-      if parent_text and parent_function_name then
-        return parent_text, parent_function_name, parent_first_arg
+  if function_name and is_target(function_name, "php") then
+    return text, function_name, first_arg
+  end
+
+  -- Not a recognized target on its own: walk up the ancestor chain once,
+  -- looking for an enclosing call that is (e.g. cursor on `auth()` nested
+  -- inside `Inertia::render(..., ['user' => auth()->user()])`).
+  local current = start_node:parent()
+  while current do
+    if vim.tbl_contains({ "function_call_expression", "scoped_call_expression" }, current:type()) then
+      local p_text, p_function_name, p_first_arg = extract_from_node(current)
+      if p_function_name and is_target(p_function_name, "php") then
+        return p_text, p_function_name, p_first_arg
+      end
+    elseif current:type() == "php_statement" then
+      for child in current:iter_children() do
+        if child:type() == "php_only" then
+          local p_function_name = extract_function_name_from_php_only(child, bufnr)
+          if p_function_name and is_target(p_function_name, "php") then
+            local p_text, fname, p_first_arg = extract_from_node(current)
+            return p_text, fname, p_first_arg
+          end
+        end
       end
     end
+    current = current:parent()
   end
 
   return text, function_name, first_arg
+end
+
+local function classify_tag_name(tag_name)
+  if not tag_name then
+    return "component", nil
+  end
+  if tag_name:match("^x%-") then
+    return "component", tag_name:gsub("^x%-", "")
+  end
+  if tag_name:match("^livewire:") then
+    return "livewire", tag_name:gsub("^livewire:", "")
+  end
+  return "component", tag_name
 end
 
 function M.extract_component(bufnr)
   local row, col = get_cursor_pos()
   local ok, html_parser = pcall(ts.get_parser, bufnr, "html")
   if not ok or not html_parser then
-    vim.notify("HTML parser not available for buffer", vim.log.levels.WARN)
+    log.debug("HTML parser not available for buffer")
     return nil, nil, nil
   end
 
@@ -411,49 +413,16 @@ function M.extract_component(bufnr)
     if t == "start_tag" or t == "self_closing_tag" then
       local full_text = clean_text(node_text(target_node, bufnr))
       local tag_name = full_text:match("<%s*([%w%-:%.]+)")
-
-      local component_path = nil
-      local component_type = "component"
-
-      if tag_name then
-        if tag_name:match("^x%-") then
-          component_path = tag_name:gsub("^x%-", "")
-          component_type = "component"
-        elseif tag_name:match("^livewire:") then
-          component_path = tag_name:gsub("^livewire:", "")
-          component_type = "livewire"
-        else
-          component_path = tag_name
-          component_type = "component"
-        end
-      end
-
+      local component_type, component_path = classify_tag_name(tag_name)
       return full_text, component_type, component_path
     end
 
     if t == "tag_name" then
       local parent = target_node:parent()
       if parent and (parent:type() == "start_tag" or parent:type() == "self_closing_tag") then
-        -- FIX: En lugar de usar solo el texto del tag_name, usar el texto completo del parent
         local full_text = clean_text(node_text(parent, bufnr))
-        local tag_name = full_text:match("<%s*([%w%-:%.]+)") -- Extraer del texto completo
-
-        local component_path = nil
-        local component_type = "component"
-
-        if tag_name then
-          if tag_name:match("^x%-") then
-            component_path = tag_name:gsub("^x%-", "")
-            component_type = "component"
-          elseif tag_name:match("^livewire:") then
-            component_path = tag_name:gsub("^livewire:", "")
-            component_type = "livewire"
-          else
-            component_path = tag_name
-            component_type = "component"
-          end
-        end
-
+        local tag_name = full_text:match("<%s*([%w%-:%.]+)")
+        local component_type, component_path = classify_tag_name(tag_name)
         return full_text, component_type, component_path
       end
     end
@@ -463,23 +432,7 @@ function M.extract_component(bufnr)
         if child:type() == "start_tag" then
           local full_text = clean_text(node_text(child, bufnr))
           local tag_name = full_text:match("<%s*([%w%-:%.]+)")
-
-          local component_path = nil
-          local component_type = "component"
-
-          if tag_name then
-            if tag_name:match("^x%-") then
-              component_path = tag_name:gsub("^x%-", "")
-              component_type = "component"
-            elseif tag_name:match("^livewire:") then
-              component_path = tag_name:gsub("^livewire:", "")
-              component_type = "livewire"
-            else
-              component_path = tag_name
-              component_type = "component"
-            end
-          end
-
+          local component_type, component_path = classify_tag_name(tag_name)
           return full_text, component_type, component_path
         end
       end
@@ -521,9 +474,19 @@ local function get_text_range(bufnr, sr, sc, er, ec)
 end
 
 -- Find matching closing parenthesis starting from directive start (returns full substring up to matching ')', and end row/col)
-local function find_closing_paren(bufnr, start_row, start_col)
-  local lines = vim.api.nvim_buf_get_lines(bufnr, start_row, -1, false)
+-- Requires '(' to immediately follow the directive name, and bounds the scan to
+-- avoid walking to the end of the buffer for directives with no parameter list.
+local MAX_CLOSING_PAREN_SCAN_LINES = 50
+
+local function find_closing_paren(bufnr, start_row, start_col, name_len)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, start_row, start_row + MAX_CLOSING_PAREN_SCAN_LINES, false)
   if not lines or #lines == 0 then
+    return nil
+  end
+
+  local paren_col = start_col + (name_len or 0)
+  local first_line = lines[1] or ""
+  if first_line:sub(paren_col + 1, paren_col + 1) ~= "(" then
     return nil
   end
 
@@ -642,6 +605,26 @@ local function split_top_level_params(s)
   return acc
 end
 
+local directive_query_cache = nil
+
+-- Parse the directive/parameter query once and reuse it (it never changes: `ft` is
+-- always "blade").
+local function get_directive_query()
+  if directive_query_cache ~= nil then
+    return directive_query_cache or nil
+  end
+
+  local query_str = [[
+    (directive) @directive
+    (parameter) @parameter
+  ]]
+
+  local parse_query = (ts.query and ts.query.parse) or ts.parse_query
+  local okq, q = pcall(parse_query, "blade", query_str)
+  directive_query_cache = okq and q or false
+  return directive_query_cache or nil
+end
+
 -- Collect directives and param_nodes grouped by parent (params attached only to immediately preceding directive)
 local function collect_directives(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
@@ -656,14 +639,8 @@ local function collect_directives(bufnr)
   end
   local root = tree:root()
 
-  local query_str = [[
-    (directive) @directive
-    (parameter) @parameter
-  ]]
-
-  local parse_query = (ts.query and ts.query.parse) or ts.parse_query
-  local okq, q = pcall(parse_query, ft, query_str)
-  if not okq or not q then
+  local q = get_directive_query()
+  if not q then
     return {}
   end
 
@@ -740,7 +717,7 @@ local function collect_directives(bufnr)
 end
 
 -- Find directive at cursor; build robust full_text and split params top-level
-function M.find_directive_at_cursor(node, bufnr)
+function M.find_directive_at_cursor(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   local directives = collect_directives(bufnr)
   local r, c = get_cursor_pos()
@@ -751,7 +728,7 @@ function M.find_directive_at_cursor(node, bufnr)
     local inside = (r > sr or (r == sr and c >= sc)) and (r < er or (r == er and c <= ec))
     if inside then
       -- attempt to find real closing paren after directive start
-      local raw_full, end_r, end_c = find_closing_paren(bufnr, sr, sc)
+      local raw_full, end_r, end_c = find_closing_paren(bufnr, sr, sc, #(d.name or ""))
       if raw_full then
         d.full_text = clean_text(raw_full)
         d.endpos = { end_r, end_c }
@@ -807,11 +784,11 @@ end
 ---   - @extends, @include, @each -> first_arg = first parameter (cleaned string)
 ---   - @includeWhen, @includeUnless -> first_arg = second parameter (cleaned string)
 ---   - @includeFirst -> first_arg = table of all views inside the array (no [ ])
-function M.extract_directive(node, bufnr)
+function M.extract_directive(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
 
   -- get the structured directive found at cursor (uses collect_directives / find_directive_at_cursor)
-  local d = M.find_directive_at_cursor(node, bufnr)
+  local d = M.find_directive_at_cursor(bufnr)
   if not d then
     return nil, nil, nil
   end
@@ -828,7 +805,8 @@ function M.extract_directive(node, bufnr)
     if not s then
       return nil
     end
-    return s:gsub("^%s*['\"](.-)['\"]%s*$", "%1")
+    local stripped = s:gsub("^%s*['\"](.-)['\"]%s*$", "%1")
+    return stripped
   end
 
   local function extract_views_from_array(raw)
@@ -841,11 +819,8 @@ function M.extract_directive(node, bufnr)
       raw = raw:sub(2, -2)
     end
     local out = {}
-    -- extract quoted entries first
-    for v in raw:gmatch("%'([^']+)%'") do
-      out[#out + 1] = v
-    end
-    for v in raw:gmatch('%"([^"]+)%"') do
+    -- extract quoted entries in a single pass (either quote style) to preserve source order
+    for _, v in raw:gmatch("(['\"])(.-)%1") do
       out[#out + 1] = v
     end
     -- fallback: split by top-level commas (simple)
@@ -865,8 +840,8 @@ function M.extract_directive(node, bufnr)
 
   -- Decide which param(s) represent the view(s)
   if fname == "@includeWhen" or fname == "@includeUnless" then
-    -- second parameter is the view
-    local candidate = params[2] or params[1]
+    -- second parameter is the view (first parameter is the boolean condition)
+    local candidate = params[2]
     if candidate then
       first_arg = extract_first_argument(candidate) or strip_quotes(candidate) or clean_text(candidate)
     end
@@ -925,7 +900,7 @@ function M.get_text_node()
     return text, fname, first_arg
   end
 
-  text, fname, first_arg = M.extract_directive(node, bufnr)
+  text, fname, first_arg = M.extract_directive(bufnr)
   if text then
     return text, fname, first_arg
   end

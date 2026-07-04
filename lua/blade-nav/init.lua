@@ -19,7 +19,7 @@ function M.setup(opts)
 
   local laravel = require("blade-nav.utils.laravel")
   if not vim.g.blade_nav.force_enable and not laravel.is_laravel_project() then
-    vim.g.blade_nav.enable = false
+    vim.g.blade_nav = vim.tbl_extend("force", vim.g.blade_nav or {}, { enable = false })
     return
   end
 
@@ -44,7 +44,6 @@ function M.setup(opts)
 
   local commands = require("blade-nav.commands")
   commands.install_artisan_command()
-  commands.clear_cache()
 
   require("blade-nav.features.annotations").setup()
 end

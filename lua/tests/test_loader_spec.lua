@@ -120,7 +120,9 @@ describe("BladeNav loader", function()
       end,
     }
     loader.ftplugin_loader()
-    assert.is_true(vim.g.loaded_blade_nav)
+    -- loaded_blade_nav must NOT be latched globally on a non-Laravel bail-out,
+    -- otherwise a later Laravel project opened in the same session would never load.
+    assert.is_nil(vim.g.loaded_blade_nav)
     assert.is_false(setup_called)
   end)
 
