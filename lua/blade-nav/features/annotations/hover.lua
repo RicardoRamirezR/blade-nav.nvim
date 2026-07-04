@@ -234,13 +234,33 @@ end
 -- (matching stock behavior) notify when neither is available.
 local function request_lsp_hover(bufnr, has_fallback)
   local win = vim.api.nvim_get_current_win()
+  local cursor = vim.api.nvim_win_get_cursor(win)
+  local changedtick = vim.api.nvim_buf_get_changedtick(bufnr)
   local done = false
+
+  local function is_stale()
+    if not vim.api.nvim_buf_is_valid(bufnr) or vim.api.nvim_get_current_buf() ~= bufnr then
+      return true
+    end
+    if not vim.api.nvim_win_is_valid(win) then
+      return true
+    end
+    if vim.api.nvim_buf_get_changedtick(bufnr) ~= changedtick then
+      return true
+    end
+    local cur = vim.api.nvim_win_get_cursor(win)
+    return cur[1] ~= cursor[1] or cur[2] ~= cursor[2]
+  end
 
   local function handler(err, result)
     if done then
       return
     end
     done = true
+
+    if is_stale() then
+      return
+    end
 
     if not err then
       local contents = result and result.contents

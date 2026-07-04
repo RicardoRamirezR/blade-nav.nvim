@@ -26,6 +26,7 @@ local config = {}
 local render_debounced
 local cancel_render_debounced
 local rendered_bufs = {}
+local toggled_on = false
 
 local function for_each_web_buffer(cb)
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
@@ -38,6 +39,7 @@ end
 function M.toggle_show()
   config.show = not config.show
   if config.show then
+    toggled_on = true
     for_each_web_buffer(function(b)
       rendered_bufs[b] = true
       renderer.render_buffer(b, true)
@@ -46,6 +48,7 @@ function M.toggle_show()
     return
   end
 
+  toggled_on = false
   renderer.clear_queue()
 
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
@@ -80,7 +83,7 @@ local function apply_to_buffer(bufnr)
   if config.create_keymaps then
     vim.keymap.set("n", "K", M.on_K, { buffer = bufnr, desc = "BladeNav: show config/env value" })
   end
-  if config.show_on_load then
+  if config.show_on_load or toggled_on then
     render_debounced(bufnr)
   end
 end
@@ -108,7 +111,7 @@ function M.setup()
     callback = function(args)
       if
         vim.tbl_contains(WEB_FILETYPES, vim.bo[args.buf].filetype)
-        and (config.show_on_load or rendered_bufs[args.buf])
+        and (config.show_on_load or toggled_on or rendered_bufs[args.buf])
       then
         render_debounced(args.buf)
       end
