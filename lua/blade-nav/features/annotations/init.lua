@@ -10,13 +10,36 @@ local debounce = require("blade-nav.utils.debounce")
 local log = require("blade-nav.utils.log")
 
 local ns = values.ns
+local WEB_FILETYPES = { "php", "blade", "html", "javascript", "vue" }
+
+local DEFAULT_CFG = {
+  show = false,
+  hl = "Comment",
+  prefix = " ⟶ ",
+  max_len = 160,
+  debounce_ms = 120,
+  show_on_load = true,
+  create_keymaps = true,
+}
+
 local config = {}
 local render_debounced
+local cancel_render_debounced
+
+local function for_each_web_buffer(cb)
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(b) and vim.tbl_contains(WEB_FILETYPES, vim.bo[b].filetype) then
+      cb(b)
+    end
+  end
+end
 
 function M.toggle_show()
   config.show = not config.show
   if config.show then
-    renderer.render_buffer(vim.api.nvim_get_current_buf(), true)
+    for_each_web_buffer(function(b)
+      renderer.render_buffer(b, true)
+    end)
     log.debug("Values enabled")
     return
   end
@@ -47,27 +70,41 @@ function M.on_K()
   hover.on_K()
 end
 
+-- Apply the buffer-local K keymap and the show_on_load initial render to a
+-- single buffer. Used both for buffers loading after setup() (via the
+-- FileType autocmd) and for buffers that already matched a web filetype
+-- before setup() ran (e.g. when the plugin is lazy-loaded on FileType).
+local function apply_to_buffer(bufnr)
+  if config.create_keymaps then
+    vim.keymap.set("n", "K", M.on_K, { buffer = bufnr, desc = "BladeNav: show config/env value" })
+  end
+  if config.show_on_load then
+    render_debounced(bufnr)
+  end
+end
+
 function M.setup()
   local core = require("blade-nav.core.config")
-  local core_cfg = core.get() or {}
-  config = core_cfg.annotations
+  config = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULT_CFG), core.get("annotations") or {})
 
   renderer.set_config(config)
   hover.set_config(config)
   hover.set_renderer(renderer)
 
-  render_debounced = debounce(function(buf)
-    renderer.render_buffer(buf, true)
-  end, config.debounce_ms or 120)
+  if cancel_render_debounced then
+    cancel_render_debounced()
+  end
 
-  local WEB_FILETYPES = { "php", "blade", "html", "javascript", "vue" }
+  render_debounced, cancel_render_debounced = debounce.debounce_per_key(function(buf)
+    renderer.render_buffer(buf, true)
+  end, config.debounce_ms)
+
   local grp = vim.api.nvim_create_augroup("BladeNavValues", { clear = true })
 
   vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
     group = grp,
     callback = function(args)
-      local ft = vim.bo[args.buf].filetype
-      if vim.tbl_contains(WEB_FILETYPES, ft) then
+      if vim.tbl_contains(WEB_FILETYPES, vim.bo[args.buf].filetype) then
         render_debounced(args.buf)
       end
     end,
@@ -76,10 +113,17 @@ function M.setup()
   vim.api.nvim_create_autocmd({ "TextChanged", "InsertLeave", "BufWritePost" }, {
     group = grp,
     callback = function(args)
-      local ft = vim.bo[args.buf].filetype
-      if vim.tbl_contains(WEB_FILETYPES, ft) then
+      if vim.tbl_contains(WEB_FILETYPES, vim.bo[args.buf].filetype) then
         render_debounced(args.buf)
       end
+    end,
+  })
+
+  vim.api.nvim_create_autocmd("FileType", {
+    group = grp,
+    pattern = WEB_FILETYPES,
+    callback = function(args)
+      apply_to_buffer(args.buf)
     end,
   })
 
@@ -97,7 +141,12 @@ function M.setup()
 
   vim.api.nvim_create_autocmd("VimLeavePre", {
     group = grp,
-    callback = renderer.cleanup_timer,
+    callback = function()
+      renderer.cleanup_timer()
+      if cancel_render_debounced then
+        cancel_render_debounced()
+      end
+    end,
   })
 
   vim.api.nvim_create_user_command("BladeNavToggleShowValues", function()
@@ -113,10 +162,14 @@ function M.setup()
   })
 
   if config.create_keymaps then
-    vim.keymap.set("n", "K", M.on_K, { desc = "BladeNav: show config/env value" })
     vim.keymap.set("n", "<leader>bv", M.toggle_show, { desc = "BladeNav: toggle show annotations" })
     vim.keymap.set("n", "<leader>bcc", M.clear_cache, { desc = "BladeNav: clear cache" })
   end
+
+  -- Buffers that already matched a web filetype before setup() ran (common
+  -- when the plugin itself is lazy-loaded on FileType) never fire the
+  -- autocmd above, so apply K + initial render to them retroactively.
+  for_each_web_buffer(apply_to_buffer)
 
   log.debug("BladeNav: annotations setup with: %s", vim.inspect(config))
 end

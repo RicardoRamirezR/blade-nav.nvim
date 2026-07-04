@@ -1,13 +1,10 @@
 local M = {}
 
 local uv = vim.uv
-local ts = vim.treesitter
 local log = require("blade-nav.utils.log")
 local values = require("blade-nav.features.annotations.values")
 
 local ns = values.ns
-local PHP_CALLS_Q = values.PHP_CALLS_Q
-local JS_CALLS_Q = values.JS_CALLS_Q
 local for_each_php_tree = values.for_each_php_tree
 local for_each_js_tree = values.for_each_js_tree
 local find_enclosing_call = values.find_enclosing_call
@@ -30,59 +27,31 @@ local function collect_php_matches(root, bufnr)
   local matches = {}
   local processed_nodes = {}
 
-  for _, match, _ in PHP_CALLS_Q:iter_matches(root, bufnr) do
-    local fn, method, key, callnode
-    local default_value = nil
+  local query = values.get_php_query()
+  if not query then
+    return matches
+  end
 
-    for id, nodes in pairs(match) do
-      local cap = PHP_CALLS_Q.captures[id]
-      local node = nodes[1]
-      local node_text = ts.get_node_text(node, bufnr)
+  for _, match, _ in query:iter_matches(root, bufnr) do
+    local info = values.extract_call_info(query, match, bufnr, find_enclosing_call)
 
-      if cap == "fn_name" then
-        fn = node_text
-      elseif cap == "method" then
-        method = node_text
-      elseif cap == "key_str" then
-        key = node_text
-      elseif cap == "default_str" then
-        default_value = node_text
+    if info and info.callnode then
+      local sr, sc, er, ec = info.callnode:range()
+      local node_range = string.format("%d:%d-%d:%d", sr, sc, er, ec)
+
+      if not processed_nodes[node_range] then
+        processed_nodes[node_range] = true
+
+        table.insert(matches, {
+          bufnr = bufnr,
+          row = er,
+          col = ec,
+          key = info.key,
+          default_value = info.default_value,
+          kind = info.kind,
+        })
       end
-
-      callnode = callnode or find_enclosing_call(node)
     end
-
-    if not key or not callnode then
-      goto continue
-    end
-
-    local sr, sc, er, ec = callnode:range()
-    local node_range = string.format("%d:%d-%d:%d", sr, sc, er, ec)
-
-    if processed_nodes[node_range] then
-      goto continue
-    end
-
-    processed_nodes[node_range] = true
-
-    local kind = (fn == "env") and "env" or "config"
-    if method and (method == "get" or method == "set") then
-      kind = "config"
-    end
-    if fn == "__" or fn == "trans" then
-      kind = "lang"
-    end
-
-    table.insert(matches, {
-      bufnr = bufnr,
-      row = er,
-      col = ec,
-      key = key,
-      default_value = default_value,
-      kind = kind,
-    })
-
-    ::continue::
   end
 
   return matches
@@ -92,54 +61,31 @@ local function collect_js_matches(root, bufnr)
   local matches = {}
   local processed_nodes = {}
 
-  for _, match, _ in JS_CALLS_Q:iter_matches(root, bufnr) do
-    local fn, key, callnode
-    local default_value = nil
+  local query = values.get_js_query()
+  if not query then
+    return matches
+  end
 
-    for id, nodes in pairs(match) do
-      local cap = JS_CALLS_Q.captures[id]
-      local node = nodes[1]
-      local node_text = ts.get_node_text(node, bufnr)
+  for _, match, _ in query:iter_matches(root, bufnr) do
+    local info = values.extract_call_info(query, match, bufnr, find_enclosing_js_call)
 
-      if cap == "fn_name" then
-        fn = node_text
-      elseif cap == "key_str" then
-        key = node_text
-      elseif cap == "default_str" then
-        default_value = node_text
+    if info and info.callnode then
+      local sr, sc, er, ec = info.callnode:range()
+      local node_range = string.format("%d:%d-%d:%d", sr, sc, er, ec)
+
+      if not processed_nodes[node_range] then
+        processed_nodes[node_range] = true
+
+        table.insert(matches, {
+          bufnr = bufnr,
+          row = er,
+          col = ec,
+          key = info.key,
+          default_value = info.default_value,
+          kind = info.kind,
+        })
       end
-
-      callnode = callnode or find_enclosing_js_call(node)
     end
-
-    if not key or not callnode or not fn then
-      goto continue
-    end
-
-    local sr, sc, er, ec = callnode:range()
-    local node_range = string.format("%d:%d-%d:%d", sr, sc, er, ec)
-
-    if processed_nodes[node_range] then
-      goto continue
-    end
-
-    processed_nodes[node_range] = true
-
-    local kind = (fn == "env") and "env" or "config"
-    if fn == "__" or fn == "trans" then
-      kind = "lang"
-    end
-
-    table.insert(matches, {
-      bufnr = bufnr,
-      row = er,
-      col = ec,
-      key = key,
-      default_value = default_value,
-      kind = kind,
-    })
-
-    ::continue::
   end
 
   return matches
@@ -174,12 +120,37 @@ local function render_matches_batch(matches, start_idx, batch_size)
   return end_idx
 end
 
+local function collect_buffer_matches(bufnr)
+  local all_matches = {}
+
+  for_each_php_tree(bufnr, function(root, b)
+    local matches = collect_php_matches(root, b)
+    for _, match in ipairs(matches) do
+      table.insert(all_matches, match)
+    end
+  end)
+
+  for_each_js_tree(bufnr, function(root, b)
+    local matches = collect_js_matches(root, b)
+    for _, match in ipairs(matches) do
+      table.insert(all_matches, match)
+    end
+  end)
+
+  return all_matches
+end
+
 local function process_queue_batch()
   if not processing_timer or is_processing then
     return
   end
 
   vim.schedule(function()
+    if not processing_timer then
+      is_processing = false
+      return
+    end
+
     is_processing = true
     local start_time = uv.hrtime()
 
@@ -197,21 +168,8 @@ local function process_queue_batch()
       end
 
       if item.type == "collect" then
-        local all_matches = {}
-
-        for_each_php_tree(item.bufnr, function(root, bufnr)
-          local matches = collect_php_matches(root, bufnr)
-          for _, match in ipairs(matches) do
-            table.insert(all_matches, match)
-          end
-        end)
-
-        for_each_js_tree(item.bufnr, function(root, bufnr)
-          local matches = collect_js_matches(root, bufnr)
-          for _, match in ipairs(matches) do
-            table.insert(all_matches, match)
-          end
-        end)
+        vim.api.nvim_buf_clear_namespace(item.bufnr, ns, 0, -1)
+        local all_matches = collect_buffer_matches(item.bufnr)
 
         if #all_matches > 0 then
           table.insert(processing_queue, {
@@ -237,6 +195,10 @@ local function process_queue_batch()
     end
 
     is_processing = false
+
+    if not processing_timer then
+      return
+    end
 
     if #processing_queue > 0 then
       processing_timer:start(1, 0, process_queue_batch)
@@ -272,22 +234,15 @@ function M.render_buffer(bufnr, use_background)
     return
   end
 
-  vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
-
   if not config.show then
+    vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
     return
   end
 
   if use_background == false then
-    for_each_php_tree(bufnr, function(root, b)
-      local matches = collect_php_matches(root, b)
-      render_matches_batch(matches, 1, #matches)
-    end)
-
-    for_each_js_tree(bufnr, function(root, b)
-      local matches = collect_js_matches(root, b)
-      render_matches_batch(matches, 1, #matches)
-    end)
+    vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+    local matches = collect_buffer_matches(bufnr)
+    render_matches_batch(matches, 1, #matches)
   else
     queue_buffer_processing(bufnr)
   end

@@ -1,5 +1,6 @@
 local M = {}
 
+local ts = vim.treesitter
 local ns = vim.api.nvim_create_namespace("blade-nav/values")
 
 local config_extractor = require("blade-nav.extractors.config")
@@ -38,10 +39,10 @@ local function invalidate_maps()
   lang_map = nil
 end
 
--- Treesitter query for config/env/Config::get/Config::set/__() in PHP
-local PHP_CALLS_Q = vim.treesitter.query.parse(
-  "php",
-  [[
+-- Treesitter query source for config/env/Config::get/Config::set/__() in PHP.
+-- Parsed lazily on first use (see get_php_query) so a missing "php" parser
+-- cannot crash plugin setup at require-time.
+local PHP_CALLS_QUERY_SRC = [[
   ; Standard function call: env('key', 'default') or env('key')
   (function_call_expression
     function: (name) @fn_name
@@ -80,12 +81,10 @@ local PHP_CALLS_Q = vim.treesitter.query.parse(
     (#eq? @scope "Config")
     (#any-of? @method "get" "set"))
 ]]
-)
 
--- Treesitter query for config/env/__() calls in JavaScript (for Blade files)
-local JS_CALLS_Q = vim.treesitter.query.parse(
-  "javascript",
-  [[
+-- Treesitter query source for config/env/__() calls in JavaScript (for Blade
+-- files). Parsed lazily, see get_js_query.
+local JS_CALLS_QUERY_SRC = [[
   ; JavaScript call expression: config('key'), env('key', 'default'), or __('key')
   (call_expression
     function: (identifier) @fn_name
@@ -93,18 +92,38 @@ local JS_CALLS_Q = vim.treesitter.query.parse(
       (string (string_fragment) @key_str)
       (string (string_fragment) @default_str)?)
     (#any-of? @fn_name "config" "env" "__" "trans"))
-
-  ; Also catch calls in binary expressions
-  (call_expression
-    function: (identifier) @fn_name
-    arguments: (arguments
-      (string (string_fragment) @key_str))
-    (#any-of? @fn_name "config" "env" "__" "trans"))
 ]]
-)
 
-assert(PHP_CALLS_Q, "Failed to parse PHP treesitter query")
-assert(JS_CALLS_Q, "Failed to parse JavaScript treesitter query")
+local php_query = nil
+local php_query_attempted = false
+local js_query = nil
+local js_query_attempted = false
+
+local function get_php_query()
+  if not php_query_attempted then
+    php_query_attempted = true
+    local ok, q = pcall(vim.treesitter.query.parse, "php", PHP_CALLS_QUERY_SRC)
+    if ok then
+      php_query = q
+    else
+      log.debug("BladeNav: PHP treesitter query unavailable, annotations disabled for PHP: %s", q)
+    end
+  end
+  return php_query
+end
+
+local function get_js_query()
+  if not js_query_attempted then
+    js_query_attempted = true
+    local ok, q = pcall(vim.treesitter.query.parse, "javascript", JS_CALLS_QUERY_SRC)
+    if ok then
+      js_query = q
+    else
+      log.debug("BladeNav: JavaScript treesitter query unavailable, annotations disabled for JS: %s", q)
+    end
+  end
+  return js_query
+end
 
 local function for_each_php_tree(bufnr, cb)
   local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
@@ -131,10 +150,13 @@ local function for_each_js_tree(bufnr, cb)
 end
 
 local function truncate(s, n)
-  if not s or #s <= n then
-    return s or ""
+  if not s then
+    return ""
   end
-  return s:sub(1, n - 1) .. "…"
+  if vim.fn.strchars(s) <= n then
+    return s
+  end
+  return vim.fn.strcharpart(s, 0, math.max(n - 1, 0)) .. "…"
 end
 
 local function find_enclosing_call(node)
@@ -157,6 +179,52 @@ local function find_enclosing_js_call(node)
     node = node:parent()
   end
   return nil
+end
+
+--- Extract the fn/method/key/default_value/callnode/kind info from a single
+--- query match. Shared by hover.lua (cursor lookups) and renderer.lua
+--- (buffer-wide collection) so the capture-extraction loop lives in one place.
+--- @param query table treesitter query the match came from
+--- @param match table match table as yielded by query:iter_matches
+--- @param source integer|string bufnr or source string for ts.get_node_text
+--- @param find_call_fn fun(node: TSNode): TSNode|nil optional enclosing-call finder
+local function extract_call_info(query, match, source, find_call_fn)
+  local fn, method, key, callnode
+  local default_value = nil
+
+  for id, nodes in pairs(match) do
+    local cap = query.captures[id]
+    local node = nodes[1]
+    local node_text = ts.get_node_text(node, source)
+
+    if cap == "fn_name" then
+      fn = node_text
+    elseif cap == "method" then
+      method = node_text
+    elseif cap == "key_str" then
+      key = node_text
+    elseif cap == "default_str" then
+      default_value = node_text
+    end
+
+    if find_call_fn then
+      callnode = callnode or find_call_fn(node)
+    end
+  end
+
+  if not key then
+    return nil
+  end
+
+  local kind = (fn == "env") and "env" or "config"
+  if method == "get" or method == "set" then
+    kind = "config"
+  end
+  if fn == "__" or fn == "trans" then
+    kind = "lang"
+  end
+
+  return { fn = fn, method = method, key = key, default_value = default_value, callnode = callnode, kind = kind }
 end
 
 local function format_value(key, default_value, kind)
@@ -246,13 +314,14 @@ M.get_env_map = get_env_map
 M.get_cfg_map = get_cfg_map
 M.get_lang_map = get_lang_map
 M.invalidate_maps = invalidate_maps
-M.PHP_CALLS_Q = PHP_CALLS_Q
-M.JS_CALLS_Q = JS_CALLS_Q
+M.get_php_query = get_php_query
+M.get_js_query = get_js_query
 M.for_each_php_tree = for_each_php_tree
 M.for_each_js_tree = for_each_js_tree
 M.truncate = truncate
 M.find_enclosing_call = find_enclosing_call
 M.find_enclosing_js_call = find_enclosing_js_call
+M.extract_call_info = extract_call_info
 M.format_value = format_value
 M.format_value_for_display = format_value_for_display
 
