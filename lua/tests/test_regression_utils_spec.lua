@@ -280,6 +280,9 @@ describe("regression: debounce tolerates uv.new_timer() failure", function()
     end, 10)
 
     debounced()
+    -- vim.wait() builds its own timer via uv.new_timer(); restore it first.
+    new_timer_stub:revert()
+    new_timer_stub = nil
     vim.wait(500, function()
       return ran
     end)
@@ -296,6 +299,9 @@ describe("regression: debounce tolerates uv.new_timer() failure", function()
     end, 10)
 
     debounced("k1")
+    -- vim.wait() builds its own timer via uv.new_timer(); restore it first.
+    new_timer_stub:revert()
+    new_timer_stub = nil
     vim.wait(500, function()
       return ran_key ~= nil
     end)
