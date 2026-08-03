@@ -1,6 +1,123 @@
 local cmd = require("blade-nav.utils.cmd")
 local fs = require("blade-nav.utils.fs")
+local cache = require("blade-nav.utils.cache")
 local uv = vim.uv
+
+describe("fs.get_root_dir", function()
+  local real_execute_silent
+  local tmpdir
+
+  local function write_file(path, content)
+    local fd = assert(uv.fs_open(path, "w", 420))
+    uv.fs_write(fd, content, -1)
+    uv.fs_close(fd)
+  end
+
+  local function mkdir(path)
+    vim.fn.mkdir(path, "p", 493)
+  end
+
+  before_each(function()
+    real_execute_silent = cmd.execute_silent
+    cache.clear()
+		tmpdir = assert(
+			uv.fs_realpath(uv.fs_mkdtemp("/tmp/blade-nav-root-test-XXXXXX"))
+		)
+    assert.is_truthy(tmpdir)
+  end)
+
+  after_each(function()
+    cmd.execute_silent = real_execute_silent
+    vim.api.nvim_buf_set_name(0, "")
+    cache.clear()
+
+    local function rmdir(path)
+      local fd = uv.fs_scandir(path)
+      if fd then
+        while true do
+          local name, t = uv.fs_scandir_next(fd)
+          if not name then
+            break
+          end
+          local full = path .. "/" .. name
+          if t == "directory" then
+            rmdir(full)
+          else
+            uv.fs_unlink(full)
+          end
+        end
+      end
+      uv.fs_rmdir(path)
+    end
+    rmdir(tmpdir)
+  end)
+
+  it("finds the nearest Laravel root (artisan marker) in a monorepo", function()
+    mkdir(tmpdir .. "/monorepo/scripts/resources/views")
+    write_file(tmpdir .. "/monorepo/scripts/artisan", "")
+    vim.api.nvim_buf_set_name(0, tmpdir .. "/monorepo/scripts/resources/views/home.blade.php")
+
+    assert.are.equal(tmpdir .. "/monorepo/scripts", fs.get_root_dir())
+  end)
+
+  it("does not reuse a cached Laravel root for a buffer outside the app", function()
+    mkdir(tmpdir .. "/monorepo/scripts/resources/views")
+    write_file(tmpdir .. "/monorepo/scripts/artisan", "")
+    vim.api.nvim_buf_set_name(0, tmpdir .. "/monorepo/scripts/resources/views/home.blade.php")
+    assert.are.equal(tmpdir .. "/monorepo/scripts", fs.get_root_dir())
+
+    cmd.execute_silent = function(command, opts)
+      if command[1] == "git" and command[2] == "rev-parse" then
+        return tmpdir .. "/monorepo", true
+      end
+      return real_execute_silent(command, opts)
+    end
+
+    vim.api.nvim_buf_set_name(0, tmpdir .. "/monorepo/assets/app.css")
+    assert.are.equal(tmpdir .. "/monorepo", fs.get_root_dir())
+  end)
+
+  it("falls back to the git root when no Laravel root is found", function()
+    mkdir(tmpdir .. "/repo/app/Models")
+    vim.api.nvim_buf_set_name(0, tmpdir .. "/repo/app/Models/User.php")
+
+    cmd.execute_silent = function(command, opts)
+      if command[1] == "git" and command[2] == "rev-parse" then
+        return tmpdir .. "/repo", true
+      end
+      return real_execute_silent(command, opts)
+    end
+
+    assert.are.equal(tmpdir .. "/repo", fs.get_root_dir())
+  end)
+
+  it("falls back to cwd when neither Laravel root nor git root is found", function()
+    mkdir(tmpdir .. "/plain")
+    vim.api.nvim_buf_set_name(0, tmpdir .. "/plain/file.txt")
+
+    cmd.execute_silent = function(command, opts)
+      if command[1] == "git" and command[2] == "rev-parse" then
+        return "fatal: not a git repository", false
+      end
+      return real_execute_silent(command, opts)
+    end
+
+    assert.are.equal(vim.fn.getcwd(), fs.get_root_dir())
+  end)
+
+  it("uses cwd as start when the buffer is unnamed", function()
+    vim.api.nvim_buf_set_name(0, "")
+
+    cmd.execute_silent = function(command, opts)
+      if command[1] == "git" and command[2] == "rev-parse" then
+        return "fatal: not a git repository", false
+      end
+      return real_execute_silent(command, opts)
+    end
+
+    assert.are.equal(vim.fn.getcwd(), fs.get_root_dir())
+  end)
+end)
 
 describe("fs.find_files", function()
   local tmpdir
