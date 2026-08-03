@@ -61,7 +61,7 @@ jobs:
           git clone --depth=1 --branch ${{ matrix.treesitter }} https://github.com/nvim-treesitter/nvim-treesitter ~/.local/share/nvim/site/pack/vendor/start/nvim-treesitter
 
       - name: Install tree-sitter CLI
-        run: npm install -g tree-sitter-cli@0.24.7
+        run: npm install -g tree-sitter-cli@0.26.11
 
       - name: Cache compiled parsers
         id: parser-cache
