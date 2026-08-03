@@ -5,6 +5,10 @@
 local log = require("blade-nav.utils.log")
 local config = require("blade-nav.core.config")
 
+-- Guarded: blink.cmp may not be installed when this module is merely loaded.
+local has_blink_types, blink_types = pcall(require, "blink.cmp.types")
+local reference_kind = has_blink_types and blink_types.CompletionItemKind.Reference or nil
+
 local Source = {}
 
 function Source.new()
@@ -36,10 +40,16 @@ function Source.get_completions(_, ctx, callback)
     close_tag_on_complete = true
   end
 
-  local completion_items = laravel.items_for_prefix(
-    input_prefix,
-    { not_include_closing_tag = not close_tag_on_complete }
-  ) or {}
+  -- items_for_prefix must never escape an error: the completion contract
+  -- requires the callback to be invoked exactly once.
+  local ok, completion_items =
+    pcall(laravel.items_for_prefix, input_prefix, { not_include_closing_tag = not close_tag_on_complete })
+  if not ok then
+    log.error("BladeNav blink source: items_for_prefix failed: %s", completion_items)
+    callback({ is_incomplete_forward = false, is_incomplete_backward = false, items = {} })
+    return
+  end
+  completion_items = completion_items or {}
 
   local items = {}
   for _, item_data in ipairs(completion_items) do
@@ -47,7 +57,7 @@ function Source.get_completions(_, ctx, callback)
       label = item_data.label,
       filterText = item_data.filter_text or item_data.label,
       insertText = item_data.new_text or item_data.label,
-      kind = require("blink.cmp.types").CompletionItemKind.Reference,
+      kind = reference_kind,
     })
   end
 

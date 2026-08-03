@@ -93,6 +93,23 @@ describe("health.check", function()
     )
   end)
 
+  it("delegates to the full integrations health report when the version gate passes", function()
+    require("blade-nav.core.config").setup({})
+
+    local health = fresh_health_module()
+    local ok, err = pcall(health.check)
+
+    assert.is_true(ok, "health.check() should not throw: " .. tostring(err))
+    assert.is_false(
+      any_match(health_calls.error, "Neovim >= 0%.11"),
+      "the version gate should not fire on a supported Neovim"
+    )
+    assert.is_true(
+      any_match(health_calls.ok, "BladeNav plugin loaded"),
+      "expected the report body from integrations.health, got: " .. vim.inspect(health_calls.ok)
+    )
+  end)
+
   it("takes the vim.health.warn path (not an error) when `php artisan --format=json` returns garbage", function()
     -- config_module.get().integrations must be a real table for
     -- check_integrations() to run; force a clean default merge regardless

@@ -15,6 +15,9 @@ local format_value_for_display = values.format_value_for_display
 
 local config = {}
 local renderer = nil
+-- Lookup (injected by features/annotations/init.lua) returning the
+-- buffer-local K mapping that predated ours, if any.
+local prev_K_lookup = nil
 
 local last_float = { win = nil, buf = nil }
 
@@ -24,6 +27,10 @@ end
 
 function M.set_renderer(r)
   renderer = r
+end
+
+function M.set_prev_K_lookup(fn)
+  prev_K_lookup = fn
 end
 
 local function find_value_in_tree(query, find_call_fn, root, bufnr, row, col)
@@ -291,6 +298,27 @@ local function request_lsp_hover(bufnr, has_fallback)
   end, handler, function() end)
 end
 
+-- Replay what K did before we took it over, mirroring gf_native() in
+-- integrations/gf.lua: invoke the captured buffer-local K mapping (a Lua
+-- callback directly, a string rhs via feedkeys with noremap so we cannot
+-- recurse into our own K), or run the built-in K when there was none.
+local function run_prev_or_native_K(bufnr)
+  local prev = prev_K_lookup and prev_K_lookup(bufnr)
+
+  if prev and prev.callback then
+    prev.callback()
+    return
+  end
+
+  if prev and type(prev.rhs) == "string" and prev.rhs ~= "" then
+    local rhs = vim.api.nvim_replace_termcodes(prev.rhs, true, true, true)
+    vim.api.nvim_feedkeys(rhs, "n", false)
+    return
+  end
+
+  pcall(vim.cmd, "silent! normal! K")
+end
+
 function M.on_K()
   local bufnr = vim.api.nvim_get_current_buf()
 
@@ -322,7 +350,11 @@ function M.on_K()
   end
 
   if not supports_hover then
-    show_fallback_value(bufnr)
+    -- No LSP hover: show our own value when there is one, otherwise behave
+    -- as if we had never taken over K in this buffer.
+    if not show_fallback_value(bufnr) then
+      run_prev_or_native_K(bufnr)
+    end
     return
   end
 

@@ -26,7 +26,8 @@ end
 
 --- Executes the native Neovim `gf` command.
 --- Looks up the user's global `gf` mapping at invocation time and uses it if it
---- exists (calling a Lua `callback` directly, or feeding a string `rhs`),
+--- exists (calling a Lua `callback` directly, or feeding a string `rhs` with
+--- remap so mappings referenced by the rhs, e.g. `<Plug>(...)`, still expand),
 --- otherwise falls back to the built-in `gf`.
 local function gf_native()
   local gf_mapping = get_keymap("n", "gf")
@@ -35,7 +36,7 @@ local function gf_native()
     gf_mapping.callback()
   elseif gf_mapping and type(gf_mapping.rhs) == "string" then
     local rhs = vim.api.nvim_replace_termcodes(gf_mapping.rhs, true, true, true)
-    vim.api.nvim_feedkeys(rhs, "n", false)
+    vim.api.nvim_feedkeys(rhs, "m", false)
   else
     pcall(vim.cmd, "silent! normal! gf")
   end
@@ -86,6 +87,23 @@ local function apply_gf_mapping(buf)
   log.debug("BladeNav gf mapping set for buffer %d.", buf)
 end
 
+--- Removes our buffer-local `gf` mapping and clears the guard flag when a
+--- buffer leaves the supported filetypes, so the mapping does not outlive its
+--- context and a later switch back re-evaluates from scratch.
+--- @param buf integer Buffer handle.
+local function remove_gf_mapping(buf)
+  if not vim.b[buf].blade_nav_gf then
+    return
+  end
+  vim.b[buf].blade_nav_gf = nil
+
+  local existing = get_keymap("n", "gf", buf)
+  if existing and existing.desc == GF_DESC then
+    pcall(vim.keymap.del, "n", "gf", { buffer = buf })
+    log.debug("BladeNav gf mapping removed from buffer %d.", buf)
+  end
+end
+
 --- Setup function for the `gf` integration.
 --- Registers the `gf` keymap for relevant filetypes.
 function M.setup()
@@ -95,11 +113,22 @@ function M.setup()
   end
   registered = true
 
+  local grp = vim.api.nvim_create_augroup("blade_nav_gf_integration", { clear = true })
+
   vim.api.nvim_create_autocmd("FileType", {
-    group = vim.api.nvim_create_augroup("blade_nav_gf_integration", { clear = true }),
+    group = grp,
     pattern = GF_FILETYPES,
     callback = function(args)
       apply_gf_mapping(args.buf)
+    end,
+  })
+
+  vim.api.nvim_create_autocmd("FileType", {
+    group = grp,
+    callback = function(args)
+      if not vim.tbl_contains(GF_FILETYPES, args.match) then
+        remove_gf_mapping(args.buf)
+      end
     end,
   })
 

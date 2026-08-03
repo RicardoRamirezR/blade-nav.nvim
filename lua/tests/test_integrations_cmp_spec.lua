@@ -15,6 +15,8 @@ local config_module = require("blade-nav.core.config")
 describe("integrations.cmp source.complete", function()
   local fixtures_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h") .. "/fixtures"
   local orig_get_root_dir
+  local laravel = require("blade-nav.utils.laravel")
+  local orig_items_for_prefix = laravel.items_for_prefix
 
   local function install_fake_cmp()
     local captured_source
@@ -75,6 +77,7 @@ describe("integrations.cmp source.complete", function()
 
   after_each(function()
     fs.get_root_dir = orig_get_root_dir
+    laravel.items_for_prefix = orig_items_for_prefix
     package.preload["cmp"] = nil
     package.loaded["cmp"] = nil
   end)
@@ -138,6 +141,38 @@ describe("integrations.cmp source.complete", function()
       end
       assert.is_not_nil(found, vim.inspect(result.items))
       assert.equals("<x-alert />", found.textEdit.newText)
+    end)
+  end)
+
+  it("calls back exactly once with an empty item list when items_for_prefix throws", function()
+    helpers.with_buffer({ "    @include('" }, { filetype = "blade" }, function()
+      local source = setup_cmp_source({ close_tag_on_complete = true })
+      assert.is_not_nil(source, "expected cmp.register_source to have captured the blade-nav source")
+
+      laravel.items_for_prefix = function()
+        error("simulated completion failure")
+      end
+
+      local calls = 0
+      local result
+      local line = "    @include('"
+      source.complete(source, {
+        context = {
+          cursor_before_line = line,
+          cursor = { line = 0, character = #line },
+        },
+        offset = 5,
+      }, function(r)
+        calls = calls + 1
+        result = r
+      end)
+
+      laravel.items_for_prefix = orig_items_for_prefix
+
+      assert.equals(1, calls, "the callback must be invoked exactly once even on error")
+      assert.is_not_nil(result)
+      assert.equals(0, #result.items)
+      assert.equals(false, result.isIncomplete)
     end)
   end)
 end)

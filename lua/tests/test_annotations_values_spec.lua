@@ -222,3 +222,85 @@ describe("annotations.values.invalidate_maps", function()
     end)
   end)
 end)
+
+describe("annotations.values query compile retry", function()
+  -- A failed query compile (parser missing) must not be a one-shot flag:
+  -- after :TSInstall the annotations should come alive without a restart,
+  -- throttled so a missing parser does not cost a compile attempt per call.
+  local orig_parse
+  local orig_time
+  local orig_loaded
+
+  local function fresh_values()
+    package.loaded["blade-nav.features.annotations.values"] = nil
+    return require("blade-nav.features.annotations.values")
+  end
+
+  before_each(function()
+    orig_parse = vim.treesitter.query.parse
+    orig_time = os.time
+    orig_loaded = package.loaded["blade-nav.features.annotations.values"]
+  end)
+
+  after_each(function()
+    vim.treesitter.query.parse = orig_parse
+    rawset(os, "time", orig_time)
+    package.loaded["blade-nav.features.annotations.values"] = orig_loaded
+  end)
+
+  it("throttles retries of a failed compile within the retry interval", function()
+    local attempts = 0
+    vim.treesitter.query.parse = function()
+      attempts = attempts + 1
+      error("parser not installed")
+    end
+
+    local v = fresh_values()
+    assert.is_nil(v.get_php_query())
+    assert.equals(1, attempts)
+
+    -- Immediate retry is throttled: no second compile attempt.
+    assert.is_nil(v.get_php_query())
+    assert.equals(1, attempts)
+
+    assert.is_nil(v.get_js_query())
+    assert.equals(2, attempts)
+    assert.is_nil(v.get_js_query())
+    assert.equals(2, attempts)
+  end)
+
+  it("retries after the interval and caches the success forever", function()
+    local attempts = 0
+    local fail = true
+    vim.treesitter.query.parse = function(lang, src)
+      attempts = attempts + 1
+      if fail then
+        error("parser not installed")
+      end
+      return orig_parse(lang, src)
+    end
+
+    local now = os.time()
+    rawset(os, "time", function()
+      return now
+    end)
+
+    local v = fresh_values()
+    assert.is_nil(v.get_php_query())
+    assert.equals(1, attempts)
+
+    -- 31s later (e.g. after :TSInstall php) the compile is retried.
+    fail = false
+    rawset(os, "time", function()
+      return now + 31
+    end)
+
+    local q = v.get_php_query()
+    assert.is_not_nil(q, "retry after the throttle interval should compile the query")
+    assert.equals(2, attempts)
+
+    -- The success is cached: no further compile attempts.
+    assert.equals(q, v.get_php_query())
+    assert.equals(2, attempts)
+  end)
+end)

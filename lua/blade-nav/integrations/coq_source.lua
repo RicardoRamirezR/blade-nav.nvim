@@ -29,7 +29,14 @@ _G.COQsources["blade-nav"] = {
       close_tag_on_complete = true
     end
 
-    local names = laravel.items_for_prefix(input, { not_include_closing_tag = not close_tag_on_complete })
+    -- items_for_prefix must never escape an error: the completion contract
+    -- requires the callback to be invoked exactly once.
+    local ok, names = pcall(laravel.items_for_prefix, input, { not_include_closing_tag = not close_tag_on_complete })
+    if not ok then
+      log.error("BladeNav coq source: items_for_prefix failed: %s", names)
+      callback()
+      return
+    end
     if not names then
       callback()
       return

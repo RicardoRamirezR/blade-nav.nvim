@@ -57,4 +57,61 @@ describe("integrations.gf fallback dispatch", function()
 
     assert.is_false(called, "fallback should not run when blade-nav already resolved a target")
   end)
+
+  it("feeds the global gf string rhs with remap so mappings it references still expand", function()
+    targets.resolve_target = function()
+      return false
+    end
+
+    local called = false
+    vim.keymap.set("n", "<Plug>(BladeNavTestGf)", function()
+      called = true
+    end)
+    -- A noremap mapping whose rhs references another mapping: only a remap
+    -- feed ("m") expands the <Plug> reference.
+    vim.keymap.set("n", "gf", "<Plug>(BladeNavTestGf)")
+
+    helpers.with_buffer({ "plain line, nothing to resolve here" }, { filetype = "php" }, function()
+      local ok, err = pcall(gf.gf)
+      assert.is_true(ok, "gf.gf() should not throw: " .. tostring(err))
+      -- Feedkeys with "m" only queues the rhs; flush the pending typeahead
+      -- synchronously so the <Plug> mapping actually triggers.
+      vim.api.nvim_feedkeys("", "x", false)
+      assert.is_true(called, "expected the <Plug> mapping referenced by the gf rhs to be invoked via remap feedkeys")
+    end)
+
+    pcall(vim.keymap.del, "n", "<Plug>(BladeNavTestGf)")
+  end)
+end)
+
+describe("integrations.gf filetype lifecycle", function()
+  local function buf_gf_mapping(bufnr)
+    for _, m in ipairs(vim.api.nvim_buf_get_keymap(bufnr, "n")) do
+      if m.lhs == "gf" then
+        return m
+      end
+    end
+  end
+
+  after_each(function()
+    pcall(vim.api.nvim_del_augroup_by_name, "blade_nav_gf_integration")
+  end)
+
+  it("removes the buffer-local gf and clears the guard flag when the filetype leaves the supported set", function()
+    helpers.with_buffer({ "plain" }, { filetype = "blade" }, function(bufnr)
+      gf.setup()
+
+      assert.is_not_nil(buf_gf_mapping(bufnr), "gf mapping should be installed for blade buffers")
+      assert.is_true(vim.b[bufnr].blade_nav_gf)
+
+      vim.bo[bufnr].filetype = "markdown"
+
+      assert.is_nil(buf_gf_mapping(bufnr), "gf mapping must not survive a filetype change away from blade/php/vue")
+      assert.is_nil(vim.b[bufnr].blade_nav_gf, "the guard flag should be cleared so re-entry re-evaluates")
+
+      vim.bo[bufnr].filetype = "blade"
+      assert.is_not_nil(buf_gf_mapping(bufnr), "gf mapping should be re-installed when switching back")
+      assert.is_true(vim.b[bufnr].blade_nav_gf)
+    end)
+  end)
 end)

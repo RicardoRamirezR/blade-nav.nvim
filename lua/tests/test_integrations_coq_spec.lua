@@ -13,6 +13,8 @@ local config_module = require("blade-nav.core.config")
 describe("integrations.coq_source fn(args, callback)", function()
   local fixtures_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h") .. "/fixtures"
   local orig_get_root_dir
+  local laravel = require("blade-nav.utils.laravel")
+  local orig_items_for_prefix = laravel.items_for_prefix
 
   local function load_coq_source()
     _G.COQsources = nil
@@ -40,6 +42,7 @@ describe("integrations.coq_source fn(args, callback)", function()
 
   after_each(function()
     fs.get_root_dir = orig_get_root_dir
+    laravel.items_for_prefix = orig_items_for_prefix
   end)
 
   it("slices the line at the cursor column and returns @include('welcome') by default", function()
@@ -107,6 +110,28 @@ describe("integrations.coq_source fn(args, callback)", function()
 
       assert.is_true(res.called)
       assert.is_nil(res.value)
+    end)
+  end)
+
+  it("calls back exactly once with no items when items_for_prefix throws", function()
+    config_module.setup({ close_tag_on_complete = true })
+
+    helpers.with_buffer({ "    @include('" }, { filetype = "blade" }, function()
+      local coq_source = load_coq_source()
+
+      laravel.items_for_prefix = function()
+        error("simulated completion failure")
+      end
+
+      local calls = 0
+      coq_source.fn({ line = "    @include('", pos = { 1, 14 } }, function(r)
+        calls = calls + 1
+        assert.is_nil(r, "coq's empty-result convention is callback() with no value")
+      end)
+
+      laravel.items_for_prefix = orig_items_for_prefix
+
+      assert.equals(1, calls, "the callback must be invoked exactly once even on error")
     end)
   end)
 end)

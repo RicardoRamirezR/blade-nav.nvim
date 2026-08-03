@@ -230,3 +230,121 @@ describe("annotations.renderer.render_buffer background/async path", function()
     vim.api.nvim_buf_delete(bufnr, { force = true })
   end)
 end)
+
+describe("annotations.renderer queue resilience", function()
+  local orig_get_php_query
+  local orig_extract_call_info
+  local orig_is_valid
+
+  before_each(function()
+    orig_get_php_query = values.get_php_query
+    orig_extract_call_info = values.extract_call_info
+    orig_is_valid = vim.api.nvim_buf_is_valid
+    values.invalidate_maps()
+    renderer.clear_queue()
+    renderer.set_config({ show = true, hl = "Comment", prefix = " -> ", max_len = 160 })
+  end)
+
+  after_each(function()
+    -- Defensive cleanup: never leak stubs, a running timer, or pending queue
+    -- entries into the next `it` block (module state is shared process-wide).
+    values.get_php_query = orig_get_php_query
+    values.extract_call_info = orig_extract_call_info
+    vim.api.nvim_buf_is_valid = orig_is_valid
+    renderer.clear_queue()
+    renderer.cleanup_timer()
+  end)
+
+  local function wait_for_queue_drain(timeout)
+    return vim.wait(timeout or 2000, function()
+      return #renderer.get_processing_queue() == 0
+    end, 10)
+  end
+
+  it("drops a buffer whose collect phase errors and keeps rendering later buffers", function()
+    -- Simulate a collect-phase failure (malformed blade/vue tree-sitter parse,
+    -- extractor exception): values.get_php_query is looked up dynamically by
+    -- collect_php_matches, so failing here errors the whole collect item.
+    local failing = true
+    values.get_php_query = function()
+      if failing then
+        error("simulated collect failure")
+      end
+      return orig_get_php_query()
+    end
+
+    local bad_bufnr = make_php_buffer({ "<?php", "config('app.bad');" })
+    renderer.render_buffer(bad_bufnr, true)
+
+    -- The failing item must be dropped, not retried forever.
+    assert.is_true(wait_for_queue_drain(2000), "queue did not drain after a collect failure")
+
+    failing = false
+    values.get_php_query = orig_get_php_query
+
+    -- The queue must have recovered: is_processing reset, timer re-armable.
+    local good_bufnr = make_php_buffer({ "<?php", "config('app.good');" })
+    renderer.render_buffer(good_bufnr, true)
+
+    assert.is_true(wait_for_queue_drain(2000), "queue did not drain for a later buffer after recovery")
+    assert.is_true(extmark_count(good_bufnr) > 0, "later buffer should still render after a collect failure")
+
+    vim.api.nvim_buf_delete(bad_bufnr, { force = true })
+    vim.api.nvim_buf_delete(good_bufnr, { force = true })
+  end)
+
+  it("keeps processing other queued buffers when one buffer's collect throws", function()
+    -- Fail only for one specific buffer: extract_call_info receives the bufnr
+    -- and is looked up dynamically, so this corrupts a single collect item.
+    local bad_bufnr = make_php_buffer({ "<?php", "config('app.corrupt');" })
+    values.extract_call_info = function(query, match, source, find_call_fn)
+      if source == bad_bufnr then
+        error("simulated corrupt buffer")
+      end
+      return orig_extract_call_info(query, match, source, find_call_fn)
+    end
+
+    local good_bufnr = make_php_buffer({ "<?php", "config('app.fine');" })
+    renderer.render_buffer(bad_bufnr, true)
+    renderer.render_buffer(good_bufnr, true)
+
+    assert.is_true(wait_for_queue_drain(2000), "one corrupt buffer blocked the whole queue")
+    values.extract_call_info = orig_extract_call_info
+
+    assert.equals(0, extmark_count(bad_bufnr))
+    assert.is_true(extmark_count(good_bufnr) > 0, "other buffers must render despite a corrupt queue sibling")
+
+    vim.api.nvim_buf_delete(bad_bufnr, { force = true })
+    vim.api.nvim_buf_delete(good_bufnr, { force = true })
+  end)
+
+  it("recovers when the scheduled batch body itself errors outside per-item processing", function()
+    local bufnr = make_php_buffer({ "<?php", "config('app.first');" })
+    renderer.render_buffer(bufnr, true)
+
+    -- Throw once from inside the batch body but outside the per-item pcall
+    -- (the buffer-validity check). Without the outer xpcall this would leave
+    -- is_processing stuck at true and kill annotations for the session.
+    local thrown = false
+    vim.api.nvim_buf_is_valid = function(b)
+      if b == bufnr and not thrown then
+        thrown = true
+        error("simulated batch body failure")
+      end
+      return orig_is_valid(b)
+    end
+
+    assert.is_true(wait_for_queue_drain(2000), "queue stayed stuck after a batch body error")
+    vim.api.nvim_buf_is_valid = orig_is_valid
+
+    -- Processing must not be wedged: a fresh render goes through.
+    local second_bufnr = make_php_buffer({ "<?php", "config('app.second');" })
+    renderer.render_buffer(second_bufnr, true)
+
+    assert.is_true(wait_for_queue_drain(2000), "queue did not drain after batch body recovery")
+    assert.is_true(extmark_count(second_bufnr) > 0, "annotations must keep working after a batch body error")
+
+    vim.api.nvim_buf_delete(bufnr, { force = true })
+    vim.api.nvim_buf_delete(second_bufnr, { force = true })
+  end)
+end)

@@ -95,32 +95,47 @@ local JS_CALLS_QUERY_SRC = [[
 ]]
 
 local php_query = nil
-local php_query_attempted = false
+local php_query_failed_at = nil
 local js_query = nil
-local js_query_attempted = false
+local js_query_failed_at = nil
+
+-- A failed query compile (parser not installed yet) is retried at most every
+-- QUERY_RETRY_INTERVAL_S so a parser installed later via :TSInstall starts
+-- working without a restart; successful compiles stay cached forever.
+local QUERY_RETRY_INTERVAL_S = 30
 
 local function get_php_query()
-  if not php_query_attempted then
-    php_query_attempted = true
-    local ok, q = pcall(vim.treesitter.query.parse, "php", PHP_CALLS_QUERY_SRC)
-    if ok then
-      php_query = q
-    else
-      log.debug("BladeNav: PHP treesitter query unavailable, annotations disabled for PHP: %s", q)
-    end
+  if php_query then
+    return php_query
+  end
+  if php_query_failed_at and (os.time() - php_query_failed_at) < QUERY_RETRY_INTERVAL_S then
+    return nil
+  end
+  local ok, q = pcall(vim.treesitter.query.parse, "php", PHP_CALLS_QUERY_SRC)
+  if ok then
+    php_query = q
+    php_query_failed_at = nil
+  else
+    php_query_failed_at = os.time()
+    log.debug("BladeNav: PHP treesitter query unavailable, annotations disabled for PHP: %s", q)
   end
   return php_query
 end
 
 local function get_js_query()
-  if not js_query_attempted then
-    js_query_attempted = true
-    local ok, q = pcall(vim.treesitter.query.parse, "javascript", JS_CALLS_QUERY_SRC)
-    if ok then
-      js_query = q
-    else
-      log.debug("BladeNav: JavaScript treesitter query unavailable, annotations disabled for JS: %s", q)
-    end
+  if js_query then
+    return js_query
+  end
+  if js_query_failed_at and (os.time() - js_query_failed_at) < QUERY_RETRY_INTERVAL_S then
+    return nil
+  end
+  local ok, q = pcall(vim.treesitter.query.parse, "javascript", JS_CALLS_QUERY_SRC)
+  if ok then
+    js_query = q
+    js_query_failed_at = nil
+  else
+    js_query_failed_at = os.time()
+    log.debug("BladeNav: JavaScript treesitter query unavailable, annotations disabled for JS: %s", q)
   end
   return js_query
 end

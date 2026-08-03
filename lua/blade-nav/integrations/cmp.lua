@@ -67,10 +67,17 @@ function M.setup(opts)
       close_tag_on_complete = opts_close_tag_on_complete
     end
 
-    local completion_items = laravel.items_for_prefix(
-      input_prefix,
-      { not_include_closing_tag = not close_tag_on_complete }
-    ) or {}
+    -- items_for_prefix must never escape an error: the completion contract
+    -- requires the callback to be invoked exactly once, or the cmp menu can
+    -- hang on this keystroke.
+    local ok, completion_items =
+      pcall(laravel.items_for_prefix, input_prefix, { not_include_closing_tag = not close_tag_on_complete })
+    if not ok then
+      log.error("BladeNav cmp source: items_for_prefix failed: %s", completion_items)
+      callback({ items = {}, isIncomplete = false })
+      return
+    end
+    completion_items = completion_items or {}
 
     log.debug("Gathered %d completion items.", #completion_items)
 

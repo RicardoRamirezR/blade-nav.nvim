@@ -140,61 +140,108 @@ local function collect_buffer_matches(bufnr)
   return all_matches
 end
 
-local function process_queue_batch()
+-- Process the queue entry at the head of the queue. A "collect" entry runs
+-- the full tree-sitter scan for its buffer and, when matches were found,
+-- queues a "render" entry; a "render" entry draws one batch of extmarks and
+-- stays queued until all of its matches are drawn.
+local function process_queue_item(item)
+  if item.type == "collect" then
+    vim.api.nvim_buf_clear_namespace(item.bufnr, ns, 0, -1)
+    local all_matches = collect_buffer_matches(item.bufnr)
+
+    if #all_matches > 0 then
+      table.insert(processing_queue, {
+        type = "render",
+        bufnr = item.bufnr,
+        matches = all_matches,
+        batch_start = 1,
+      })
+    end
+
+    table.remove(processing_queue, 1)
+  elseif item.type == "render" then
+    local last_idx = render_matches_batch(item.matches, item.batch_start, processing_batch_size)
+
+    if last_idx < #item.matches then
+      item.batch_start = last_idx + 1
+    else
+      table.remove(processing_queue, 1)
+    end
+  end
+end
+
+local process_queue_batch
+
+local function process_queue_batch_body()
+  if not processing_timer then
+    is_processing = false
+    return
+  end
+
+  is_processing = true
+  local start_time = uv.hrtime()
+
+  while #processing_queue > 0 do
+    local item = processing_queue[1]
+
+    -- The 5ms budget bounds this scheduled run of the collect/render phases;
+    -- a single tree-sitter iteration is not chunked (one collect may exceed
+    -- it on a huge buffer).
+    local elapsed = (uv.hrtime() - start_time) / 1000000
+    if elapsed > max_processing_time_ms then
+      break
+    end
+
+    if not vim.api.nvim_buf_is_valid(item.bufnr) then
+      table.remove(processing_queue, 1)
+      goto continue
+    end
+
+    -- One corrupt buffer (malformed blade/vue, extractor error) must not kill
+    -- the queue for every other buffer: drop the failing item and continue.
+    local ok, err = pcall(process_queue_item, item)
+    if not ok then
+      log.error("BladeNav: dropping buffer %d from the annotation queue after an error: %s", item.bufnr, err)
+      table.remove(processing_queue, 1)
+    end
+
+    ::continue::
+  end
+
+  is_processing = false
+
+  if not processing_timer then
+    return
+  end
+
+  if #processing_queue > 0 then
+    processing_timer:start(1, 0, process_queue_batch)
+  else
+    processing_timer:stop()
+  end
+end
+
+process_queue_batch = function()
   if not processing_timer or is_processing then
     return
   end
 
   vim.schedule(function()
-    if not processing_timer then
-      is_processing = false
+    -- An error escaping this scheduled callback would leave is_processing
+    -- stuck at true and the timer disarmed, silently killing annotations for
+    -- the rest of the session; catch everything, drop the offending item,
+    -- and keep the queue moving.
+    local ok, err = xpcall(process_queue_batch_body, debug.traceback)
+    if ok then
       return
     end
 
-    is_processing = true
-    local start_time = uv.hrtime()
-
-    while #processing_queue > 0 do
-      local item = processing_queue[1]
-
-      local elapsed = (uv.hrtime() - start_time) / 1000000
-      if elapsed > max_processing_time_ms then
-        break
-      end
-
-      if not vim.api.nvim_buf_is_valid(item.bufnr) then
-        table.remove(processing_queue, 1)
-        goto continue
-      end
-
-      if item.type == "collect" then
-        vim.api.nvim_buf_clear_namespace(item.bufnr, ns, 0, -1)
-        local all_matches = collect_buffer_matches(item.bufnr)
-
-        if #all_matches > 0 then
-          table.insert(processing_queue, {
-            type = "render",
-            bufnr = item.bufnr,
-            matches = all_matches,
-            batch_start = 1,
-          })
-        end
-
-        table.remove(processing_queue, 1)
-      elseif item.type == "render" then
-        local last_idx = render_matches_batch(item.matches, item.batch_start, processing_batch_size)
-
-        if last_idx < #item.matches then
-          item.batch_start = last_idx + 1
-        else
-          table.remove(processing_queue, 1)
-        end
-      end
-
-      ::continue::
-    end
-
+    log.error("BladeNav: annotation queue processing failed: %s", err)
     is_processing = false
+
+    if #processing_queue > 0 then
+      table.remove(processing_queue, 1)
+    end
 
     if not processing_timer then
       return

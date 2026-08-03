@@ -29,17 +29,15 @@ local function check_environment()
   if fs.command_exists("php") then
     local php_version = cmd.execute_silent({ "php", "--version" }, { cwd = root }):match("^[^\n]+")
     ok("PHP: " .. (php_version or "unknown version"))
-  else
-    error("PHP not found in PATH")
-  end
 
-  if fs.command_exists("php") then
     local artisan_version = cmd.execute_silent(cmd.artisan_argv({ "--version" }), { cwd = root }):match("^[^\n]+")
     if artisan_version and artisan_version ~= "" then
       ok("Artisan: " .. artisan_version)
     else
       warn("Cannot run `php artisan --version`")
     end
+  else
+    error("PHP not found in PATH")
   end
 end
 
