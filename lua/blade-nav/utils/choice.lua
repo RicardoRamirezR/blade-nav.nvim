@@ -39,7 +39,9 @@ local function normalize_choices(choices)
   return normalized
 end
 
---- Sanitize file name by removing symbols like ✓ or ✗
+--- Sanitize file name by removing the annotation markers (✓/✗) the picker
+--- itself prefixes entries with (see e.g. targets/lang.lua). Marks anywhere
+--- else are legitimate filename characters and must be preserved.
 --- @param filename string
 --- @return string
 local function sanitize_filename(filename)
@@ -47,7 +49,11 @@ local function sanitize_filename(filename)
     return ""
   end
   for _, mark in ipairs(CHECK_MARKS) do
-    filename = filename:gsub("%s*" .. vim.pesc(mark) .. "%s*", "")
+    local prefix = mark .. " "
+    if filename:sub(1, #prefix) == prefix then
+      filename = filename:sub(#prefix + 1)
+      break
+    end
   end
   return vim.trim(filename)
 end
@@ -129,7 +135,8 @@ local function run_command_choice(entry, after_open)
 
   local root = fs.get_root_dir()
 
-  local ok, err = pcall(vim.system, argv, { text = true, cwd = root }, function(obj)
+  -- Kill the artisan process if it hangs (no timeout previously).
+  local ok, err = pcall(vim.system, argv, { text = true, cwd = root, timeout = 30000 }, function(obj)
     vim.schedule(function()
       if obj.code ~= 0 then
         local output = vim.trim((obj.stdout or "") .. (obj.stderr or ""))
@@ -167,14 +174,22 @@ function M.select(title, choices, on_select)
   local original_choices = choices
   local display_choices = normalize_choices(choices)
 
+  -- Track index prefixes separately: map each exact display string back to
+  -- its original entry so a label that itself starts with "N: " is never
+  -- mistaken for an index.
+  local display_to_choice = {}
+  for i, choice in ipairs(original_choices) do
+    display_to_choice[display_choices[i]] = choice
+  end
+
   --- Map a display string back to the original entry (string or table).
   local function resolve(display)
     if not display then
       return nil
     end
-    local idx = tonumber(display:match("^(%d+): "))
-    if idx and original_choices[idx] ~= nil then
-      return original_choices[idx]
+    local tracked = display_to_choice[display]
+    if tracked ~= nil then
+      return tracked
     end
     return (display:gsub("^%d+: ", "", 1))
   end

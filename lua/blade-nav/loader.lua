@@ -38,9 +38,13 @@ function M.ftplugin_loader()
     local setup_ok, setup_err = pcall(blade_nav.setup)
     if not setup_ok then
       vim.notify("[BladeNav] Setup failed: " .. tostring(setup_err), vim.log.levels.WARN)
+      -- Do not latch vim.g.loaded_blade_nav on failure: allow retry later.
+      return
     end
   else
     vim.notify("[BladeNav] Failed to load module: " .. tostring(blade_nav), vim.log.levels.ERROR)
+    -- Do not latch vim.g.loaded_blade_nav on failure: allow retry later.
+    return
   end
   vim.g.loaded_blade_nav = true
 end

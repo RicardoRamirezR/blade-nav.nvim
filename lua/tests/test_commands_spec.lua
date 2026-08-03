@@ -96,8 +96,9 @@ describe("commands.install_artisan_command", function()
   end)
 
   it("notifies an error and does not write the file when mkdir fails", function()
+    -- vim.fn.mkdir does not throw on failure; it returns 0.
     vim.fn.mkdir = function()
-      error("EACCES: permission denied")
+      return 0
     end
 
     vim.cmd("BladeNavInstallArtisanCommand")
@@ -113,6 +114,26 @@ describe("commands.install_artisan_command", function()
       end
     end
     assert.is_true(found_error, vim.inspect(notify_calls))
+  end)
+
+  it("skips writing and warns when an existing BladeNav.php diverges from the bundled one", function()
+    local dest_path = tmpdir .. "/app/Console/Commands/BladeNav.php"
+    assert.equals(1, vim.fn.mkdir(vim.fn.fnamemodify(dest_path, ":h"), "p"))
+    assert.is_truthy(fs.write_file(dest_path, "<?php // user-customized command"))
+
+    vim.cmd("BladeNavInstallArtisanCommand")
+
+    local written = fs.read_file(dest_path)
+    assert.equals("<?php // user-customized command", written, "divergent existing file must not be overwritten")
+
+    local found_warn = false
+    for _, call in ipairs(notify_calls) do
+      if call.msg:match("already exists with different content") then
+        found_warn = true
+        assert.equals(vim.log.levels.WARN, call.level)
+      end
+    end
+    assert.is_true(found_warn, vim.inspect(notify_calls))
   end)
 
   it("get_blade_nav_filename() resolves to the real, readable BladeNav.php at the plugin root", function()

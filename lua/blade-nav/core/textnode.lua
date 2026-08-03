@@ -334,6 +334,17 @@ function M.extract_php(node, bufnr)
         local clean_first_arg
         if first_arg and function_name then
           first_arg = clean_text(first_arg)
+          if first_arg:sub(1, 1) == "[" then
+            -- Array first argument (e.g. view(['a', 'b'])): the capture above
+            -- stops at the first comma, producing a corrupt fragment like
+            -- "['a'". Re-capture the balanced array and take the quoted
+            -- strings inside instead.
+            local array_text = php_text:match("^[%w_:]+%s*%(%s*(%b[])") or first_arg
+            for _, s in array_text:gmatch("(['\"])(.-)%1") do
+              clean_first_arg = clean_first_arg or s
+            end
+            return function_name .. "(" .. clean_text(array_text) .. ")", function_name, clean_first_arg
+          end
           clean_first_arg = extract_first_argument(first_arg)
           return function_name .. "(" .. first_arg .. ")", function_name, clean_first_arg
         else

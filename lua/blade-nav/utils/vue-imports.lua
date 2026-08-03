@@ -9,6 +9,7 @@ local fn = vim.fn
 
 -- Module-local caches (not the shared utils/cache.lua module: these keys are
 -- ad-hoc and would pollute/collide with that module's namespace).
+-- imports_cache keeps only the latest changedtick entry per buffer.
 local imports_cache = {}
 local jsconfig_cache = nil
 
@@ -122,9 +123,9 @@ local function analyze_imports(bufnr)
   bufnr = bufnr or api.nvim_get_current_buf()
 
   local changedtick = api.nvim_buf_get_changedtick(bufnr)
-  local cache_key = bufnr .. ":" .. changedtick
-  if imports_cache[cache_key] then
-    return imports_cache[cache_key].data
+  local cached = imports_cache[bufnr]
+  if cached and cached.changedtick == changedtick then
+    return cached.data
   end
 
   local parser = ts.get_parser(bufnr, "vue")
@@ -145,7 +146,8 @@ local function analyze_imports(bufnr)
     end
   end
 
-  imports_cache[cache_key] = {
+  imports_cache[bufnr] = {
+    changedtick = changedtick,
     data = imports,
     timestamp = vim.uv.now(),
   }
@@ -153,15 +155,44 @@ local function analyze_imports(bufnr)
   return imports
 end
 
+--- Resolve the configured jsconfig path against the project root (relative
+--- config values must not depend on Neovim's cwd).
+---@return string|nil
+local function jsconfig_path()
+  local configured = config.get("jsconfig_path")
+  if not configured or configured == "" then
+    return nil
+  end
+  if configured:sub(1, 1) ~= "/" then
+    configured = fs.get_root_dir() .. "/" .. configured
+  end
+  return (configured:gsub("/%./", "/"))
+end
+
 ---Read and parse jsconfig.json
 ---@return table|nil config Parsed jsconfig or nil if failed
 local function read_jsconfig()
-  if jsconfig_cache then
-    return jsconfig_cache
+  local path = jsconfig_path()
+  if not path then
+    return nil
   end
 
-  log.debug("Reading jsconfig:", vim.inspect(config.get("jsconfig_path")))
-  local data = fs.read_file(config.get("jsconfig_path"))
+  -- Invalidate the cached parse when the file changes on disk (mtime).
+  local stat = vim.uv.fs_stat(path)
+  local mtime_sec = stat and stat.mtime and stat.mtime.sec or nil
+  local mtime_nsec = stat and stat.mtime and stat.mtime.nsec or nil
+
+  if
+    jsconfig_cache
+    and jsconfig_cache.path == path
+    and jsconfig_cache.mtime_sec == mtime_sec
+    and jsconfig_cache.mtime_nsec == mtime_nsec
+  then
+    return jsconfig_cache.data
+  end
+
+  log.debug("Reading jsconfig:", path)
+  local data = fs.read_file(path)
   if not data then
     return nil
   end
@@ -172,11 +203,18 @@ local function read_jsconfig()
     return nil
   end
 
-  jsconfig_cache = parsed
+  jsconfig_cache = {
+    path = path,
+    mtime_sec = mtime_sec,
+    mtime_nsec = mtime_nsec,
+    data = parsed,
+  }
   return parsed
 end
 
----Resolve import paths using jsconfig aliases
+---Resolve import paths using jsconfig aliases.
+---Alias targets are relative to the project root (where jsconfig.json lives),
+---so matches are rewritten to root-absolute paths.
 ---@param imports table Table of imports to resolve
 ---@param jsconfig table Parsed jsconfig.json
 local function resolve_imports(imports, jsconfig)
@@ -185,15 +223,51 @@ local function resolve_imports(imports, jsconfig)
     return
   end
 
+  local root = fs.get_root_dir()
+
   for name, path in pairs(imports) do
     for alias, replacement_paths in pairs(paths) do
       local alias_pattern = alias:gsub("/%*", "/")
       if path:sub(1, #alias_pattern) == alias_pattern then
-        local replacement = replacement_paths[1]:gsub("/%*", "/")
-        imports[name] = path:gsub(alias_pattern, "./" .. replacement)
+        -- An alias may map to an empty array in jsconfig; skip those.
+        local first = replacement_paths[1]
+        if type(first) == "string" then
+          local replacement = first:gsub("/%*", "/")
+          imports[name] = root .. "/" .. (path:gsub(alias_pattern, replacement))
+        end
       end
     end
   end
+end
+
+-- Extensions probed for extensionless imports, in priority order.
+local PROBE_EXTENSIONS = { "vue", "tsx", "jsx", "ts", "js" }
+
+---Probe an import path for a concrete file: for extensionless paths try
+---"<path>.<ext>" and "<path>/index.<ext>" for the known extensions.
+---@param path string Absolute path
+---@return string
+local function probe_import_path(path)
+  if fn.filereadable(path) == 1 then
+    return path
+  end
+  if path:match("%.%w+$") then
+    -- Already has an extension; nothing to probe.
+    return path
+  end
+  for _, ext in ipairs(PROBE_EXTENSIONS) do
+    local candidate = path .. "." .. ext
+    if fn.filereadable(candidate) == 1 then
+      return candidate
+    end
+  end
+  for _, ext in ipairs(PROBE_EXTENSIONS) do
+    local candidate = path .. "/index." .. ext
+    if fn.filereadable(candidate) == 1 then
+      return candidate
+    end
+  end
+  return path
 end
 
 ---Resolve the import path
@@ -207,7 +281,8 @@ function M.resolve_path_for(line)
   end
   log.debug("Tag name: %s", tag_name)
 
-  local imports = analyze_imports()
+  local bufnr = api.nvim_get_current_buf()
+  local imports = analyze_imports(bufnr)
   local jsconfig = read_jsconfig()
   log.debug("Imports: %s", vim.inspect(imports))
 
@@ -215,7 +290,25 @@ function M.resolve_path_for(line)
     resolve_imports(imports, jsconfig)
   end
 
-  return imports[tag_name]
+  local path = imports[tag_name]
+  if not path then
+    return nil
+  end
+
+  if path:sub(1, 2) == "./" or path:sub(1, 3) == "../" then
+    -- Relative import: resolve against the importing buffer's directory so
+    -- the result does not depend on Neovim's cwd.
+    local buf_name = api.nvim_buf_get_name(bufnr)
+    local base = buf_name ~= "" and fn.fnamemodify(buf_name, ":p:h") or fn.getcwd()
+    path = vim.fs.normalize(base .. "/" .. path)
+  end
+
+  local is_absolute = path:sub(1, 1) == "/" or path:match("^%a:[/\\]") ~= nil
+  if is_absolute then
+    path = probe_import_path(path)
+  end
+
+  return path
 end
 
 return M

@@ -15,6 +15,14 @@ local function debounce(fn, ms)
       timer:close()
     end
     timer = uv.new_timer()
+    if not timer then
+      -- Cannot debounce without a timer handle; run the work scheduled
+      -- instead of dropping it silently.
+      vim.schedule(function()
+        fn(unpack(args))
+      end)
+      return
+    end
     timer:start(ms, 0, function()
       timer:stop()
       timer:close()
@@ -54,6 +62,12 @@ local function debounce_per_key(fn, ms)
     local args = { ... }
     cancel(key)
     local timer = uv.new_timer()
+    if not timer then
+      vim.schedule(function()
+        fn(key, unpack(args))
+      end)
+      return
+    end
     timers[key] = timer
     timer:start(ms, 0, function()
       timer:stop()

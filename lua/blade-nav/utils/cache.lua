@@ -18,7 +18,8 @@ function M.get(key, ttl)
   end
 
   local cfg = config.get()
-  ttl = ttl or cfg.cache_timeout or 5000
+  -- Fallback must match the documented default in core/config.lua (50000).
+  ttl = ttl or cfg.cache_timeout or 50000
 
   if uv.now() - entry.timestamp > ttl then
     cache_store[key] = nil

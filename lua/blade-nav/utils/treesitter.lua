@@ -52,19 +52,49 @@ local function extract_blade_directive(line_text, target_fn)
 end
 
 --- Converts a simple PHP array string to a Lua table of strings.
+--- Single sequential scan handling both quote types and backslash escapes,
+--- preserving the original source order.
 --- Note: This is a basic implementation. For complex arrays, full PHP TS parsing is needed.
 --- @param text string The PHP array literal string (e.g., '['a', 'b']').
 --- @return table List of string values.
 local function php_array_to_lua(text)
   local items = {}
+  local i = 1
+  local len = #text
 
-  for str in text:gmatch("'([^']*)'") do
-    table.insert(items, str)
+  while i <= len do
+    local ch = text:sub(i, i)
+    if ch == "'" or ch == '"' then
+      local quote = ch
+      local buf = {}
+      local closed = false
+      i = i + 1
+      while i <= len do
+        local c = text:sub(i, i)
+        if c == "\\" then
+          -- Keep the escaped character, drop the backslash.
+          local nxt = text:sub(i + 1, i + 1)
+          if nxt ~= "" then
+            buf[#buf + 1] = nxt
+            i = i + 2
+          else
+            i = i + 1
+          end
+        elseif c == quote then
+          closed = true
+          break
+        else
+          buf[#buf + 1] = c
+          i = i + 1
+        end
+      end
+      if closed then
+        items[#items + 1] = table.concat(buf)
+      end
+    end
+    i = i + 1
   end
 
-  for str in text:gmatch('"([^"]*)"') do
-    table.insert(items, str)
-  end
   return items
 end
 
@@ -332,9 +362,16 @@ function M.extract_php_function_keys(php_code, target_fn)
   end
   log.debug(php_code)
 
-  local php_parser = vim.treesitter.get_string_parser(php_code, "php")
-  local php_tree = php_parser:parse()[1]
-  if not php_tree then
+  local ok_parser, php_parser = pcall(vim.treesitter.get_string_parser, php_code, "php")
+  if not ok_parser or not php_parser then
+    log.debug("TS PHP parser creation failed in extract_php_function_keys: %s", tostring(php_parser))
+    return keys
+  end
+
+  local ok_tree, php_tree = pcall(function()
+    return php_parser:parse()[1]
+  end)
+  if not ok_tree or not php_tree then
     log.debug(
       "TS PHP parsing failed in extract_php_config_keys for code: %s",
       php_code:sub(1, 50) .. (php_code:len() > 50 and "..." or "")
@@ -343,6 +380,21 @@ function M.extract_php_function_keys(php_code, target_fn)
   end
 
   local php_root = php_tree:root()
+
+  -- Scoped call:
+  -- Config::get('key'), Config::set('key', ...) Route::view('view', ...) View::make('view') Inertia::render('view')
+  -- This part matches when target_fn is the method name (e.g., "get", "set", "make", "view", "render").
+  -- For the "route" target only a method literally named "route" references a
+  -- route name (e.g. Redirect::route('name'), URL::route('name')); matching
+  -- Route::get('/users', ...) here would treat route DEFINITIONS as references.
+  local scope = target_fn:gsub("^%l", string.upper)
+  local scoped_predicates
+  if target_fn == "route" then
+    scoped_predicates = [[(#eq? @method "route")]]
+  else
+    scoped_predicates =
+      string.format([[(#eq? @scope "%s") (#any-of? @method "get" "set" "make" "view" "render")]], scope)
+  end
 
   local query_string = [[
     ; Standard function call:
@@ -360,9 +412,6 @@ function M.extract_php_function_keys(php_code, target_fn)
         . (_)*)
       (#eq? @fn_name "%s"))
 
-      ; Scoped call:
-      ; Config::get('key'), Config::set('key', ...) Route::view('view', ...) View::make('view') Inertia::render('view')
-      ; This part matches when target_fn is the method name (e.g., "get", "set", "make", "view", "render")
       (scoped_call_expression
         scope: (name) @scope
         name: (name) @method
@@ -370,12 +419,15 @@ function M.extract_php_function_keys(php_code, target_fn)
           (argument
             (string
               (string_content) @key_str)))
-        (#eq? @scope "%s")
-        (#any-of? @method "get" "set" "make" "view" "render"))
+        %s)
   ]]
 
-  local scope = target_fn:gsub("^%l", string.upper)
-  local php_query = vim.treesitter.query.parse("php", string.format(query_string, target_fn, scope))
+  local ok_query, php_query =
+    pcall(vim.treesitter.query.parse, "php", string.format(query_string, target_fn, scoped_predicates))
+  if not ok_query or not php_query then
+    log.debug("TS PHP query parsing failed in extract_php_function_keys: %s", tostring(php_query))
+    return keys
+  end
 
   for id, node in php_query:iter_captures(php_root, php_code) do
     if php_query.captures[id] == "key_str" then
@@ -388,11 +440,27 @@ end
 
 local function extract_blade_function_keys(line_text, target_fn)
   local keys = {}
-  local blade_parser = vim.treesitter.get_string_parser(line_text, "blade")
-  local blade_tree = blade_parser:parse()[1]
+
+  local ok_parser, blade_parser = pcall(vim.treesitter.get_string_parser, line_text, "blade")
+  if not ok_parser or not blade_parser then
+    log.debug("TS Blade parser creation failed in extract_blade_function_keys: %s", tostring(blade_parser))
+    return keys
+  end
+
+  local ok_tree, blade_tree = pcall(function()
+    return blade_parser:parse()[1]
+  end)
+  if not ok_tree or not blade_tree then
+    log.debug("TS Blade parsing failed in extract_blade_function_keys: %s", tostring(blade_tree))
+    return keys
+  end
   local blade_root = blade_tree:root()
 
-  local php_only_query = vim.treesitter.query.parse("blade", "(php_only) @php")
+  local ok_query, php_only_query = pcall(vim.treesitter.query.parse, "blade", "(php_only) @php")
+  if not ok_query or not php_only_query then
+    log.debug("TS Blade query parsing failed in extract_blade_function_keys: %s", tostring(php_only_query))
+    return keys
+  end
 
   for _, node in php_only_query:iter_captures(blade_root, line_text) do
     local php_code = vim.treesitter.get_node_text(node, line_text)

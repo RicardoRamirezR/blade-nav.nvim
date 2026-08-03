@@ -9,7 +9,9 @@ local M = {}
 --- Get the root directory of the project.
 --- @return string
 function M.get_root_dir()
-  local cache_key = "root_dir"
+  -- Key the cache by cwd so switching projects in the same session
+  -- (e.g. `:cd other-project`) does not serve the previous root.
+  local cache_key = "root_dir:" .. vim.fn.getcwd()
   local cached = cache.get(cache_key)
   if cached then
     return cached
@@ -136,7 +138,14 @@ function M.find_files(path, extension, exclude_dirs)
       for _, dir in ipairs(exclude_dirs) do
         table.insert(argv, "-not")
         table.insert(argv, "-path")
-        table.insert(argv, path .. "/" .. dir .. "/*")
+        -- A dir containing "/" is already relative to the cwd (e.g.
+        -- "resources/views/livewire"); prefixing it with `path` again would
+        -- produce a pattern that never matches.
+        if dir:find("/") then
+          table.insert(argv, dir .. "/*")
+        else
+          table.insert(argv, path .. "/" .. dir .. "/*")
+        end
       end
     end
   end

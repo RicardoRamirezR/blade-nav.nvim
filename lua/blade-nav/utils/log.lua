@@ -6,7 +6,10 @@ local M = {}
 
 -- Cache of source file lines, keyed by path (debug-only perf: avoids
 -- re-reading the same source file from disk on every debug log call).
+-- Capped so long sessions do not grow it without bound.
+local MAX_FILE_LINES_CACHE = 50
 local file_lines_cache = {}
+local file_lines_cache_count = 0
 
 local function get_file_lines(source_file)
   local cached = file_lines_cache[source_file]
@@ -23,7 +26,14 @@ local function get_file_lines(source_file)
     file:close()
   end
 
+  if file_lines_cache_count >= MAX_FILE_LINES_CACHE then
+    -- Simple count-based eviction: drop everything once the cap is hit.
+    file_lines_cache = {}
+    file_lines_cache_count = 0
+  end
+
   file_lines_cache[source_file] = lines
+  file_lines_cache_count = file_lines_cache_count + 1
   return lines
 end
 

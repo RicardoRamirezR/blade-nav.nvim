@@ -27,7 +27,15 @@ class BladeNav extends Command
     public function handle()
     {
         $aliases = Container::getInstance()->make('blade.compiler')->getClassComponentAliases();
-        $psr4s = require base_path('vendor/composer/autoload_psr4.php');
+
+        $psr4Path = base_path('vendor/composer/autoload_psr4.php');
+        if (!file_exists($psr4Path)) {
+            // Emit a machine-parseable error payload instead of a fatal error.
+            echo json_encode(['error' => 'missing vendor/composer/autoload_psr4.php (run composer install)']);
+            return 1;
+        }
+
+        $psr4s = require $psr4Path;
         $components = [];
         foreach ($psr4s as $class => $dirs) {
             foreach ($aliases as $name => $alias) {
@@ -40,6 +48,8 @@ class BladeNav extends Command
             }
         }
 
-        echo json_encode($components);
+        // json_encode returns false on invalid UTF-8; keep stdout valid JSON.
+        $json = json_encode($components);
+        echo $json === false ? '{}' : $json;
     }
 }

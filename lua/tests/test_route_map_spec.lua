@@ -19,4 +19,17 @@ describe("build_route_map", function()
     assert.equals("App\\Http\\Controllers\\InvokableController", map.foo.controller)
     assert.is_nil(map.foo.method)
   end)
+
+  it("skips routes whose action is vim.NIL or not a string", function()
+    local routes = {
+      { name = "closure_route", action = vim.NIL },
+      { name = "number_action", action = 42 },
+      { name = "foo", action = "App\\Http\\Controllers\\FooController@bar" },
+    }
+    local ok, map = pcall(laravel.__test_build_route_map, routes)
+    assert.is_true(ok, "build_route_map must not error on non-string actions")
+    assert.is_nil(map.closure_route)
+    assert.is_nil(map.number_action)
+    assert.equals("bar", map.foo.method)
+  end)
 end)

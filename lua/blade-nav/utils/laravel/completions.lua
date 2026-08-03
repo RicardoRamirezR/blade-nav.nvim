@@ -96,9 +96,12 @@ local function find_livewire()
 end
 
 --- Find all routes
+--- Never blocks the completion path on `php artisan route:list`: when the
+--- route list is not primed yet, an async re-prime is triggered and the
+--- currently-known (possibly empty) names are returned.
 --- @return table
 local function find_routes()
-  return require("blade-nav.utils.laravel.routes").get_route_names()
+  return require("blade-nav.utils.laravel.routes").get_route_names({ async = true })
 end
 
 --- Find all views excluding livewire and Laravel components

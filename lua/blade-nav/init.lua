@@ -12,9 +12,21 @@ local M = {}
 --- @field jsconfig_path string Path for Vue jsconfig
 --- @field laravel_components_paths table List of additional component search paths
 
+-- The plugin requires Neovim >= 0.11 (see README); warn once per session.
+local version_warned = false
+
 --- Setup function for BladeNav.
 --- @param opts? BladeNavConfig User-provided configuration options.
 function M.setup(opts)
+  if vim.fn.has("nvim-0.11") == 0 then
+    if not version_warned then
+      version_warned = true
+      vim.notify("[BladeNav] blade-nav.nvim requires Neovim 0.11 or later; disabling.", vim.log.levels.WARN)
+    end
+    vim.g.blade_nav = vim.tbl_extend("force", vim.g.blade_nav or {}, { enable = false })
+    return
+  end
+
   vim.g.blade_nav = vim.tbl_extend("force", vim.g.blade_nav or {}, opts or {})
 
   local laravel = require("blade-nav.utils.laravel")

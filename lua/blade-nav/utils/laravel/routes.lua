@@ -10,11 +10,27 @@ local log = require("blade-nav.utils.log")
 local M = {}
 
 local route_cache_watcher = nil
+local route_cache_watcher_root = nil
 local routes_watcher = nil
+local routes_watcher_root = nil
+local watcher_start_error_notified = false
 
 -- Lowered bound for synchronous route:list calls (caller needs an immediate
 -- result); the background re-prime path runs fully async instead.
 local SYNC_TIMEOUT_MS = 2000
+
+-- Short TTL for empty/failure route-name lists: an artisan failure must not
+-- be cached forever, but the completion path should not re-run artisan on
+-- every keystroke either.
+local EMPTY_NAMES_TTL_MS = 2000
+
+--- Build a project-scoped cache key so switching projects in the same
+--- session does not serve another project's routes.
+--- @param name string
+--- @return string
+local function scoped_key(name)
+  return "route_list:" .. name .. ":" .. fs.get_root_dir()
+end
 
 function M.invalidate_routes_cache()
   log.debug("Invalidating all cached routes")
@@ -25,9 +41,35 @@ local debounced_invalidate = debounce(function()
   M.invalidate_routes_cache()
 end, 200)
 
+local function close_watcher(handle)
+  pcall(function()
+    handle:stop()
+    handle:close()
+  end)
+end
+
+--- Watchers retry on later calls, so only the first start failure is surfaced
+--- at error level; retries log at debug level to avoid notify-spam.
+--- @param msg string
+local function notify_watcher_failure(msg)
+  if watcher_start_error_notified then
+    log.debug("%s", msg)
+  else
+    watcher_start_error_notified = true
+    log.error("%s", msg)
+  end
+end
+
 local function watch_route_cache()
+  local root = fs.get_root_dir()
   if route_cache_watcher then
-    return
+    if route_cache_watcher_root == root then
+      return
+    end
+    -- Project root changed (e.g. `:cd` to another project): re-anchor.
+    close_watcher(route_cache_watcher)
+    route_cache_watcher = nil
+    route_cache_watcher_root = nil
   end
 
   local handle, err = uv.new_fs_event()
@@ -36,7 +78,6 @@ local function watch_route_cache()
     return
   end
 
-  local root = fs.get_root_dir()
   local ok, start_err = pcall(handle.start, handle, root .. "/bootstrap/cache", {}, function(err2, fname, events)
     if err2 then
       vim.schedule(function()
@@ -63,16 +104,25 @@ local function watch_route_cache()
   end)
 
   if not ok then
-    log.error("Failed to start fs_event for bootstrap/cache: %s", tostring(start_err))
+    close_watcher(handle)
+    notify_watcher_failure(string.format("Failed to start fs_event for bootstrap/cache: %s", tostring(start_err)))
   else
     route_cache_watcher = handle
+    route_cache_watcher_root = root
     log.debug("Watching bootstrap/cache dir for route cache changes")
   end
 end
 
 local function watch_routes_dir()
+  local root = fs.get_root_dir()
   if routes_watcher then
-    return
+    if routes_watcher_root == root then
+      return
+    end
+    -- Project root changed (e.g. `:cd` to another project): re-anchor.
+    close_watcher(routes_watcher)
+    routes_watcher = nil
+    routes_watcher_root = nil
   end
 
   local handle, err = uv.new_fs_event()
@@ -81,7 +131,6 @@ local function watch_routes_dir()
     return
   end
 
-  local root = fs.get_root_dir()
   local ok, start_err = pcall(handle.start, handle, root .. "/routes", {}, function(err2, filename, events)
     if err2 then
       log.error("Route watcher error: %s", err2)
@@ -92,9 +141,11 @@ local function watch_routes_dir()
   end)
 
   if not ok then
-    log.error("Failed to start fs_event on routes/: %s", tostring(start_err))
+    close_watcher(handle)
+    notify_watcher_failure(string.format("Failed to start fs_event on routes/: %s", tostring(start_err)))
   else
     routes_watcher = handle
+    routes_watcher_root = root
     log.debug("Watching routes/ directory for changes")
   end
 end
@@ -102,7 +153,8 @@ end
 local function build_route_map(routes)
   local map = {}
   for _, r in ipairs(routes) do
-    if r.name and r.action then
+    -- r.action may be vim.NIL (JSON null) or otherwise not a string.
+    if r.name and type(r.action) == "string" then
       local controller_method = vim.split(r.action, "@")
       map[r.name] = {
         controller = controller_method[1],
@@ -119,7 +171,7 @@ local function apply_primed_routes(output, ok)
     local ok_parse, all_routes = pcall(vim.json.decode, output)
     if ok_parse and type(all_routes) == "table" then
       primed_map = build_route_map(all_routes)
-      cache.set("route_list:primed", primed_map)
+      cache.set(scoped_key("primed"), primed_map)
       log.debug("Primed cache with %d routes", vim.tbl_count(primed_map))
     end
   end
@@ -150,7 +202,7 @@ local function prime_routes(async)
 end
 
 function M.get_route_list(route_name)
-  local primed_routes = cache.get("route_list:primed", math.huge)
+  local primed_routes = cache.get(scoped_key("primed"), math.huge)
   if primed_routes then
     log.debug("Cache primed")
     if route_name then
@@ -201,16 +253,41 @@ function M.get_route_list(route_name)
   return route_map
 end
 
-function M.get_route_names()
-  local cache_key = "route_list:route_name"
+--- Get all route names.
+--- @param opts? { async?: boolean } When async, never block on artisan: if the
+--- route list is not primed yet, kick off a background re-prime and return the
+--- currently-known (possibly empty) names. Used by the completion path.
+--- @return string[]
+function M.get_route_names(opts)
+  opts = opts or {}
+  local cache_key = scoped_key("route_name")
   local cached = cache.get(cache_key, math.huge)
   if cached then
     return cached
   end
 
-  local routes = M.get_route_list()
-  local route_names = {}
+  -- Empty/failure results are cached under a separate key read with a short
+  -- TTL (never long-term): artisan may simply have failed this time.
+  local empty_key = scoped_key("route_name_empty")
+  local cached_empty = cache.get(empty_key, EMPTY_NAMES_TTL_MS)
+  if cached_empty then
+    return cached_empty
+  end
 
+  local routes
+  if opts.async then
+    routes = cache.get(scoped_key("primed"), math.huge)
+    if not routes then
+      -- Not primed: trigger the async re-prime and return what is currently
+      -- known (nothing) instead of blocking the caller on artisan.
+      prime_routes(true)
+      routes = {}
+    end
+  else
+    routes = M.get_route_list()
+  end
+
+  local route_names = {}
   if routes and type(routes) == "table" then
     for route_name, _ in pairs(routes) do
       if route_name and route_name ~= vim.NIL then
@@ -220,6 +297,10 @@ function M.get_route_names()
   end
 
   table.sort(route_names)
+
+  if #route_names == 0 then
+    return cache.set(empty_key, route_names)
+  end
 
   return cache.set(cache_key, route_names)
 end

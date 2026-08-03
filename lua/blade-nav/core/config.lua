@@ -19,18 +19,6 @@ local schema = {
   annotations = "table",
 }
 
-local function validate(config)
-  for key, expected in pairs(schema) do
-    local val = config[key]
-    if val ~= nil and type(val) ~= expected then
-      vim.notify(
-        string.format("[BladeNav] Invalid config: '%s' expected %s but got %s", key, expected, type(val)),
-        vim.log.levels.WARN
-      )
-    end
-  end
-end
-
 -- @class BladeNavConfig
 -- @field cache_timeout integer Timeout for cached data in milliseconds (default: 50000)
 -- @field debug boolean Enable debug logging (default: false)
@@ -50,7 +38,7 @@ local default_config = {
   close_tag_on_complete = true,
   include_routes_in_cmp = true,
   inertia_pages_path = nil,
-  inertia_extensions = { "vue", "tsx", "jsx", "ts" },
+  inertia_extensions = { "vue", "tsx", "jsx", "ts", "js" },
   laravel_components_paths = {},
   handlers = {
     directive = true,
@@ -78,6 +66,22 @@ local default_config = {
     create_keymaps = true,
   },
 }
+
+--- Warn about invalidly-typed options and REPLACE them with defaults, so
+--- downstream indexing (e.g. `config.integrations.gf`) can never crash on a
+--- user passing `integrations = false` and similar.
+local function validate(config)
+  for key, expected in pairs(schema) do
+    local val = config[key]
+    if val ~= nil and type(val) ~= expected then
+      vim.notify(
+        string.format("[BladeNav] Invalid config: '%s' expected %s but got %s", key, expected, type(val)),
+        vim.log.levels.WARN
+      )
+      config[key] = vim.deepcopy(default_config[key])
+    end
+  end
+end
 
 --- Merges user-provided options with defaults and handles legacy global config.
 --- This function incorporates logic to read vim.g.blade_nav.laravel_components

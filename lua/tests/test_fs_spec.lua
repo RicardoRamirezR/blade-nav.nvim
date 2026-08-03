@@ -121,6 +121,76 @@ describe("fs.find_files", function()
     -- Restore original function
     fs.command_exists = original_command_exists
   end)
+
+  it("respects exclude_dirs given as root-relative paths (find branch)", function()
+    -- Regression: callers pass exclusions relative to the project root (e.g.
+    -- { "resources/views/livewire" } with path "resources/views"); prefixing
+    -- them with `path` again yields a pattern that never matches, leaking
+    -- excluded files on systems without `fd`.
+    local original_command_exists = fs.command_exists
+    fs.command_exists = function(bin_name)
+      if bin_name == "fd" then
+        return false
+      end
+      return original_command_exists(bin_name)
+    end
+
+    uv.fs_mkdir(tmpdir .. "/views/livewire", 493)
+    local fd = assert(uv.fs_open(tmpdir .. "/views/livewire/counter.blade.php", "w", 420))
+    uv.fs_write(fd, "<div>counter</div>", -1)
+    uv.fs_close(fd)
+
+    -- get_root_dir is mocked to tmpdir, so `find` runs with cwd=tmpdir and
+    -- emits root-relative paths, exactly like the real caller.
+    local files = fs.find_files("views", "blade.php", { "views/livewire" })
+    assert.is_truthy(files)
+    assert.is_true(vim.tbl_contains(files, "views/home.blade.php"))
+    for _, f in ipairs(files) do
+      assert.is_falsy(f:match("counter.blade.php"), "excluded livewire view leaked: " .. f)
+    end
+
+    -- Restore original function
+    fs.command_exists = original_command_exists
+  end)
+end)
+
+describe("fs.get_root_dir", function()
+  local cache = require("blade-nav.utils.cache")
+
+  after_each(function()
+    cache.clear()
+  end)
+
+  it("caches the root per cwd (no cross-project staleness after :cd)", function()
+    local orig_getcwd = vim.fn.getcwd
+    local orig_execute_silent = cmd.execute_silent
+
+    local cwd = "/project-a"
+    local git_calls = 0
+    cmd.execute_silent = function(_, _)
+      git_calls = git_calls + 1
+      return cwd, true
+    end
+
+    vim.fn.getcwd = function()
+      return cwd
+    end
+
+    package.loaded["blade-nav.utils.fs"] = nil
+    local fresh_fs = require("blade-nav.utils.fs")
+
+    assert.equals("/project-a", fresh_fs.get_root_dir())
+    assert.equals("/project-a", fresh_fs.get_root_dir())
+    assert.equals(1, git_calls, "same cwd should hit the cache")
+
+    cwd = "/project-b"
+    assert.equals("/project-b", fresh_fs.get_root_dir())
+    assert.equals(2, git_calls, "a new cwd must not be served the previous root")
+
+    vim.fn.getcwd = orig_getcwd
+    cmd.execute_silent = orig_execute_silent
+    package.loaded["blade-nav.utils.fs"] = nil
+  end)
 end)
 
 describe("fs.project_relative", function()

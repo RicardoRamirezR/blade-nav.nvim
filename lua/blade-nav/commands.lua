@@ -15,13 +15,26 @@ function M.install_artisan_command()
       return
     end
 
-    local mkdir_ok, mkdir_err = pcall(vim.fn.mkdir, vim.fn.fnamemodify(dest_path, ":h"), "p")
-    if not mkdir_ok then
-      vim.notify("Error creating directory: " .. tostring(mkdir_err), vim.log.levels.ERROR)
+    local dst_content = laravel.modify_namespace(src_content, laravel.psr4_app())
+
+    -- Never clobber an existing, divergent BladeNav.php without confirmation
+    -- (health already detects divergence via sha256).
+    local existing = fs.read_file(dest_path)
+    if existing and existing ~= dst_content then
+      vim.notify(
+        "BladeNav.php already exists with different content; skipping. Remove it manually to reinstall.",
+        vim.log.levels.WARN
+      )
       return
     end
 
-    local dst_content = laravel.modify_namespace(src_content, laravel.psr4_app())
+    -- vim.fn.mkdir returns 0 on failure (it does not throw).
+    local mkdir_result = vim.fn.mkdir(vim.fn.fnamemodify(dest_path, ":h"), "p")
+    if mkdir_result ~= 1 then
+      vim.notify("Error creating directory: " .. vim.fn.fnamemodify(dest_path, ":h"), vim.log.levels.ERROR)
+      return
+    end
+
     local ok, dst_err = fs.write_file(dest_path, dst_content)
     if not ok then
       vim.notify("Error writing file: " .. dst_err, vim.log.levels.ERROR)
