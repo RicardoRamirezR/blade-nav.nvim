@@ -7,14 +7,25 @@ local cache = require("blade-nav.utils.cache")
 local M = {}
 
 --- Get the root directory of the project.
+--- Prefers the nearest Laravel root (artisan marker) relative to the current
+--- buffer, then the Git repository root, then the current working directory.
 --- @return string
 function M.get_root_dir()
-  -- Key the cache by cwd so switching projects in the same session
-  -- (e.g. `:cd other-project`) does not serve the previous root.
-  local cache_key = "root_dir:" .. vim.fn.getcwd()
+  -- Key the cache by buffer path and cwd so that neither buffers in
+  -- different apps of a monorepo nor switching projects via `:cd`
+  -- serve a stale root.
+  local buf_name = vim.api.nvim_buf_get_name(0)
+  local start = buf_name ~= "" and buf_name or vim.fn.getcwd()
+
+  local cache_key = "root_dir:" .. start .. ":" .. vim.fn.getcwd()
   local cached = cache.get(cache_key)
   if cached then
     return cached
+  end
+
+  local laravel_root = vim.fs.root(0, "artisan")
+  if laravel_root then
+    return cache.set(cache_key, laravel_root)
   end
 
   local root_dir, ok = cmd.execute_silent({ "git", "rev-parse", "--show-toplevel" })

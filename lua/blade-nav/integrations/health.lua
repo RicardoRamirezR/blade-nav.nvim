@@ -97,7 +97,7 @@ local function check_project_files()
   local root_dir = fs.get_root_dir()
   if not root_dir or root_dir == "" then
     root_dir = vim.fn.getcwd()
-    warn("Could not detect Git root, fallback to cwd: " .. root_dir)
+    warn("Could not detect Laravel or Git root, fallback to cwd: " .. root_dir)
   end
 
   if laravel.is_laravel_project(root_dir) then
