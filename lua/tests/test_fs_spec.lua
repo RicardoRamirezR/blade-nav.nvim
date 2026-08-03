@@ -20,7 +20,9 @@ describe("fs.get_root_dir", function()
   before_each(function()
     real_execute_silent = cmd.execute_silent
     cache.clear()
-    tmpdir = uv.fs_mkdtemp("/tmp/blade-nav-root-test-XXXXXX")
+		tmpdir = assert(
+			uv.fs_realpath(uv.fs_mkdtemp("/tmp/blade-nav-root-test-XXXXXX"))
+		)
     assert.is_truthy(tmpdir)
   end)
 
