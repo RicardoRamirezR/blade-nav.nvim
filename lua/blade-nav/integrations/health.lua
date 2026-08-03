@@ -34,7 +34,7 @@ local function check_environment()
   end
 
   if fs.command_exists("php") then
-    local artisan_version = cmd.execute_silent({ "php", "artisan", "--version" }, { cwd = root }):match("^[^\n]+")
+    local artisan_version = cmd.execute_silent(cmd.artisan_argv({ "--version" }), { cwd = root }):match("^[^\n]+")
     if artisan_version and artisan_version ~= "" then
       ok("Artisan: " .. artisan_version)
     else
@@ -136,7 +136,7 @@ local function check_blade_command()
   ok("Purpose: provides component aliases from external packages via `blade-nav:components-aliases`")
 
   local root = fs.get_root_dir()
-  local output, ok_cmd = cmd.execute_silent({ "php", "artisan", "--format=json" }, { cwd = root })
+  local output, ok_cmd = cmd.execute_silent(cmd.artisan_argv({ "--format=json" }), { cwd = root })
   if not ok_cmd then
     warn("Cannot run `php artisan` to detect commands " .. output)
     return

@@ -102,7 +102,7 @@ describe("health.check", function()
     local cmd = require("blade-nav.utils.cmd")
     local orig_execute_silent = cmd.execute_silent
     cmd.execute_silent = function(argv, opts)
-      if argv[1] == "php" and argv[2] == "artisan" and argv[3] == "--format=json" then
+      if argv[1] == "php" and vim.tbl_contains(argv, "--format=json") then
         return "not valid json {{{", true
       end
       return orig_execute_silent(argv, opts)

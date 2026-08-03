@@ -136,7 +136,7 @@ local function prime_routes(async)
   watch_route_cache()
 
   local root = fs.get_root_dir()
-  local args = { "php", "artisan", "route:list", "--json", "--columns=name,action" }
+  local args = cmd.artisan_argv({ "route:list", "--json", "--columns=name,action" })
 
   if async then
     cmd.execute_async(args, { cwd = root }, function(output, ok)
@@ -176,14 +176,10 @@ function M.get_route_list(route_name)
   watch_route_cache()
 
   local root = fs.get_root_dir()
-  local output, ok = cmd.execute_silent({
-    "php",
-    "artisan",
-    "route:list",
-    "--name=" .. route_name,
-    "--json",
-    "--columns=name,action",
-  }, { cwd = root, timeout = SYNC_TIMEOUT_MS })
+  local output, ok = cmd.execute_silent(
+    cmd.artisan_argv({ "route:list", "--name=" .. route_name, "--json", "--columns=name,action" }),
+    { cwd = root, timeout = SYNC_TIMEOUT_MS }
+  )
   if not ok then
     log.debug("Root: " .. root)
     log.warn("Failed to execute 'php artisan route:list --json'. Output: %s", output or "nil")

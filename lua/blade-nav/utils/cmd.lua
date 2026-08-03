@@ -29,6 +29,16 @@ local function normalize_result(ok_call, obj)
   return obj.stdout, true
 end
 
+--- Builds an argv list for a `php artisan` invocation.
+--- PHP error output (deprecations, warnings) is redirected to stderr so
+--- stdout stays machine-parseable (e.g. `--json` output); the exit code and
+--- stderr capture on failure are unaffected.
+--- @param args string[] Arguments after `artisan` (e.g. { "route:list", "--json" })
+--- @return string[]
+function M.artisan_argv(args)
+  return vim.list_extend({ "php", "-d", "display_errors=stderr", "artisan" }, args)
+end
+
 --- Executes system command silently (combining stdout/stderr).
 --- @param cmd table Command as an argv list { "command", "arg1", ... }
 --- @param opts? table Options for vim.system (e.g., { cwd = "/path", timeout = ms })
