@@ -25,7 +25,7 @@ end
 
 function M.get_capabilities()
   return {
-    targets = { "livewire" },
+    targets = { "livewire", "@livewire" },
     filetypes = { "blade" },
   }
 end
@@ -72,7 +72,7 @@ function M.get_target(context)
     log.debug("Not a Blade file.")
     return nil
   end
-  if context.target and context.target ~= "livewire" then
+  if context.target and context.target ~= "livewire" and context.target ~= "@livewire" then
     return nil
   end
 

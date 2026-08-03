@@ -138,6 +138,130 @@ describe("Inertia target handler", function()
       })
       assert.equals("Admin.Dashboard", result.name)
     end)
+
+    it("extracts the page name after a nested pages directory at any depth", function()
+      clear_blade_nav_modules()
+      config = require("blade-nav.core.config")
+      config.setup({ inertia_pages_path = "src/Pages" })
+      cache = require("blade-nav.utils.cache")
+      cache.clear()
+      inertia = require("blade-nav.targets.inertia")
+
+      local fixtures_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h") .. "/fixtures"
+      local bufnr = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_name(bufnr, fixtures_dir .. "/resources/js/src/Pages/Home.vue")
+      vim.api.nvim_set_current_buf(bufnr)
+
+      local fs = require("blade-nav.utils.fs")
+      local root_dir_stub = stub(fs, "get_root_dir").returns(fixtures_dir)
+
+      local result = inertia.get_target({ filetype = "vue", line = "<template>" })
+
+      root_dir_stub:revert()
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+
+      assert.is_not_nil(result)
+      assert.equals("inertia_reverse", result.type)
+      assert.equals("Home", result.name)
+    end)
+  end)
+
+  describe("reverse lookup", function()
+    it("anchors the grep pattern with a closing quote and excludes vendor/", function()
+      local fs = require("blade-nav.utils.fs")
+      local cmd = require("blade-nav.utils.cmd")
+
+      local captured
+      local root_dir_stub = stub(fs, "get_root_dir").returns("/fake/root")
+      local cmd_exists_stub = stub(fs, "command_exists", function(c)
+        return c == "grep"
+      end)
+      local exec_stub = stub(cmd, "execute_silent", function(argv)
+        captured = argv
+        return "", false
+      end)
+
+      local ok = inertia.resolve({ type = "inertia_reverse", name = "Admin/User" })
+
+      root_dir_stub:revert()
+      cmd_exists_stub:revert()
+      exec_stub:revert()
+
+      assert.is_false(ok)
+      assert.is_table(captured)
+      assert.is_true(vim.tbl_contains(captured, "--exclude-dir=vendor"))
+      local pattern = captured[#captured - 1]
+      -- 'Admin/User' must not also match 'Admin/UserList': closing quote anchor
+      assert.is_truthy(pattern:find([=[Admin/User['"]]=], 1, true), "missing closing anchor in: " .. pattern)
+      assert.is_truthy(pattern:find([=[Admin\.User['"]]=], 1, true), "missing dot-notation anchor in: " .. pattern)
+    end)
+
+    it("caches the reverse lookup per buffer so repeat gf does not re-grep", function()
+      local fs = require("blade-nav.utils.fs")
+      local cmd = require("blade-nav.utils.cmd")
+
+      local calls = 0
+      local root_dir_stub = stub(fs, "get_root_dir").returns("/fake/root")
+      local cmd_exists_stub = stub(fs, "command_exists", function(c)
+        return c == "grep"
+      end)
+      local exec_stub = stub(cmd, "execute_silent", function()
+        calls = calls + 1
+        return "", false
+      end)
+
+      inertia.resolve({ type = "inertia_reverse", name = "Admin/User" })
+      inertia.resolve({ type = "inertia_reverse", name = "Admin/User" })
+
+      root_dir_stub:revert()
+      cmd_exists_stub:revert()
+      exec_stub:revert()
+
+      assert.equals(1, calls, "expected a single grep for repeated gf on the same page")
+    end)
+  end)
+
+  describe("page path resolution", function()
+    it("handles an empty inertia_extensions table without erroring", function()
+      clear_blade_nav_modules()
+      config = require("blade-nav.core.config")
+      config.setup({ inertia_extensions = {} })
+      cache = require("blade-nav.utils.cache")
+      cache.clear()
+      inertia = require("blade-nav.targets.inertia")
+
+      local fs = require("blade-nav.utils.fs")
+      local root_dir_stub = stub(fs, "get_root_dir").returns("/fake/root")
+
+      local ok, result = pcall(inertia.resolve, { type = "inertia", name = "Home" })
+
+      root_dir_stub:revert()
+
+      assert.is_true(ok, "resolve() raised: " .. tostring(result))
+      assert.is_false(result)
+    end)
+
+    it("probes Page/index.<ext> when resolving a page name", function()
+      local tmpdir = vim.uv.fs_mkdtemp("/tmp/blade-nav-inertia-test-XXXXXX")
+      assert.is_truthy(tmpdir)
+      tmpdir = vim.uv.fs_realpath(tmpdir) or tmpdir
+
+      vim.fn.mkdir(tmpdir .. "/resources/js/Pages/Profile", "p")
+      vim.fn.writefile({ "<template></template>" }, tmpdir .. "/resources/js/Pages/Profile/index.vue")
+
+      local fs = require("blade-nav.utils.fs")
+      local root_dir_stub = stub(fs, "get_root_dir").returns(tmpdir)
+
+      local ok = inertia.resolve({ type = "inertia", name = "Profile" })
+
+      root_dir_stub:revert()
+
+      assert.is_true(ok)
+      assert.equals(tmpdir .. "/resources/js/Pages/Profile/index.vue", vim.api.nvim_buf_get_name(0))
+
+      vim.cmd("silent! bwipeout!")
+      vim.fn.delete(tmpdir, "rf")
+    end)
   end)
 
   describe("capabilities", function()

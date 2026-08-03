@@ -53,9 +53,9 @@ describe("blade-nav.targets.lang", function()
     uv.fs_write(fd, '{"welcome": "Hello"}', -1)
     uv.fs_close(fd)
 
-    -- PHP locale
+    -- PHP locale (includes a nested array, like real Laravel lang files)
     fd = assert(uv.fs_open(tmpdir .. "/resources/lang/es/messages.php", "w", 420))
-    uv.fs_write(fd, "<?php return ['greeting' => 'Hola'];", -1)
+    uv.fs_write(fd, "<?php return ['greeting' => 'Hola', 'whatsapp' => ['token' => 'abc']];", -1)
     uv.fs_close(fd)
   end)
 
@@ -137,6 +137,34 @@ describe("blade-nav.targets.lang", function()
       end
     end
     assert.is_true(has_x, "Expected ✗ entry for messages.php but got:\n" .. table.concat(choices, "\n"))
+  end)
+
+  it("marks nested PHP keys with ✓ (nested array traversal, not literal regex)", function()
+    -- messages.php contains 'whatsapp' => ['token' => ...]: the dotted key
+    -- whatsapp.token only exists via nested-array traversal.
+    local info = { type = "php", name = "messages.whatsapp.token" }
+    local ok = lang.resolve(info)
+    assert.is_true(ok)
+
+    local choices = called_select_file[#called_select_file].choices
+    local has_check = false
+    for _, c in ipairs(choices) do
+      if c:match("^✓ resources/lang/es/messages%.php$") then
+        has_check = true
+        break
+      end
+    end
+    assert.is_true(has_check, "Expected ✓ entry for messages.php but got:\n" .. table.concat(choices, "\n"))
+  end)
+
+  it("caches locale file list and decoded JSON across resolve calls", function()
+    local cache = require("blade-nav.utils.cache")
+
+    local ok = lang.resolve({ type = "json", name = "welcome" })
+    assert.is_true(ok)
+
+    assert.is_table(cache.get("targets_lang_locale_files:" .. tmpdir))
+    assert.is_table(cache.get("targets_lang_json:" .. tmpdir .. "/resources/lang/en.json"))
   end)
 
   it("handles missing files gracefully", function()

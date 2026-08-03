@@ -21,6 +21,9 @@ function M.get_capabilities()
   }
 end
 
+-- Forward declaration (defined below); used to locate the pages directory.
+local resolve_pages_path
+
 local function extract_page_name_from_buffer()
   local bufname = vim.api.nvim_buf_get_name(0)
   if bufname == "" then
@@ -31,7 +34,10 @@ local function extract_page_name_from_buffer()
   local root = fs.get_root_dir()
   local rel = bufname:gsub("^" .. vim.pesc(root) .. "/", "")
 
-  local page_name = rel:match("resources/js/[^/]+/(.+)%.[^.]+$")
+  -- Capture whatever comes after the configured pages directory (default
+  -- "Pages"), no matter how deep it sits under resources/js.
+  local pages_path = resolve_pages_path()
+  local page_name = rel:match("resources/js/" .. vim.pesc(pages_path) .. "/(.+)%.[^.]+$")
   if not page_name then
     return nil
   end
@@ -179,13 +185,16 @@ local function watch_app_file()
 
   if not ok then
     log.error("Failed to start fs_event for resources/js: %s", tostring(start_err))
+    if not handle:is_closing() then
+      handle:close()
+    end
   else
     app_watcher = handle
     log.debug("Watching resources/js for app.js/app.ts changes")
   end
 end
 
-local function resolve_pages_path()
+resolve_pages_path = function()
   local config = require("blade-nav.core.config")
   local timeout = config.get("cache_timeout") or 50000
 
@@ -207,10 +216,21 @@ local function get_path(page_name)
 
   local config = require("blade-nav.core.config")
   local extensions = config.get("inertia_extensions") or { "vue", "tsx", "jsx", "ts" }
+  if #extensions == 0 then
+    extensions = { "vue", "tsx", "jsx", "ts" }
+  end
 
   local root = fs.get_root_dir()
   for _, ext in ipairs(extensions) do
     local file_path = root .. "/resources/js/" .. path .. "/" .. page_name .. "." .. ext
+    if vim.fn.filereadable(file_path) == 1 then
+      return file_path
+    end
+  end
+
+  -- Folder-style pages: Page/index.<ext>
+  for _, ext in ipairs(extensions) do
+    local file_path = root .. "/resources/js/" .. path .. "/" .. page_name .. "/index." .. ext
     if vim.fn.filereadable(file_path) == 1 then
       return file_path
     end
@@ -254,18 +274,20 @@ local function find_controller_for_page(page_name)
   local dot_name = page_name:gsub("/", ".")
   local slash_name = page_name:gsub("%.", "/")
 
+  -- Anchor the page name with a closing quote so 'Admin/User' does not also
+  -- match 'Admin/UserList'.
   local pattern = table.concat({
-    "inertia\\(.*['\"]" .. escape_ere(slash_name),
-    "inertia\\(.*['\"]" .. escape_ere(dot_name),
-    "Inertia::render\\(.*['\"]" .. escape_ere(slash_name),
-    "Inertia::render\\(.*['\"]" .. escape_ere(dot_name),
+    "inertia\\(.*['\"]" .. escape_ere(slash_name) .. "['\"]",
+    "inertia\\(.*['\"]" .. escape_ere(dot_name) .. "['\"]",
+    "Inertia::render\\(.*['\"]" .. escape_ere(slash_name) .. "['\"]",
+    "Inertia::render\\(.*['\"]" .. escape_ere(dot_name) .. "['\"]",
   }, "|")
 
   local grep_cmd
   if fs.command_exists("rg") then
-    grep_cmd = { "rg", "--files-with-matches", "--glob", "*.php", "-e", pattern, root }
+    grep_cmd = { "rg", "--files-with-matches", "--glob", "*.php", "--glob", "!vendor/**", "-e", pattern, root }
   elseif fs.command_exists("grep") then
-    grep_cmd = { "grep", "-rlE", "--include=*.php", pattern, root }
+    grep_cmd = { "grep", "-rlE", "--include=*.php", "--exclude-dir=vendor", pattern, root }
   else
     return {}
   end
@@ -291,7 +313,16 @@ local function resolve_reverse(target_info)
   local page_name = target_info.name
   log.debug("Reverse resolving inertia page: %s", page_name)
 
-  local controllers = find_controller_for_page(page_name)
+  -- The reverse lookup greps the whole project synchronously; cache the
+  -- result per buffer so repeated gf on the same page is cheap.
+  local bufname = vim.api.nvim_buf_get_name(0)
+  local cache_key = "inertia_reverse:" .. (bufname ~= "" and bufname or page_name)
+  local controllers = cache.get(cache_key)
+  if not controllers then
+    controllers = find_controller_for_page(page_name)
+    cache.set(cache_key, controllers)
+  end
+
   if #controllers == 0 then
     log.debug("No controller found for inertia page: %s", page_name)
     return false

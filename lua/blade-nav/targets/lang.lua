@@ -3,7 +3,9 @@
 
 local fs = require("blade-nav.utils.fs")
 local log = require("blade-nav.utils.log")
+local cache = require("blade-nav.utils.cache")
 local choice = require("blade-nav.utils.choice")
+local lang_extractor = require("blade-nav.extractors.lang")
 
 local M = {}
 
@@ -37,9 +39,16 @@ end
 -- Laravel 9+ moved translations to a root-level `lang/`; older apps keep
 -- them under `resources/lang/`.
 -- Each entry: { path = "/full/path/to/lang/..." }
+-- Cached per project root (TTL-based) to avoid rescanning on every gf.
 local function get_available_locale_files()
-  local results = {}
   local root = fs.get_root_dir()
+  local cache_key = "targets_lang_locale_files:" .. root
+  local cached = cache.get(cache_key)
+  if cached then
+    return cached
+  end
+
+  local results = {}
   local lang_dir = root .. "/lang"
 
   if not file_exists(lang_dir) then
@@ -47,7 +56,7 @@ local function get_available_locale_files()
   end
 
   if not file_exists(lang_dir) then
-    return results
+    return cache.set(cache_key, results)
   end
 
   local function scan_dir(dir)
@@ -72,11 +81,17 @@ local function get_available_locale_files()
   end
 
   scan_dir(lang_dir)
-  return results
+  return cache.set(cache_key, results)
 end
 
 -- Key existence checks json
 local function json_key_exists(filepath, key)
+  local cache_key = "targets_lang_json:" .. filepath
+  local cached = cache.get(cache_key)
+  if cached then
+    return cached[key] ~= nil
+  end
+
   local ok, lines = pcall(vim.fn.readfile, filepath)
   if not ok or not lines or #lines == 0 then
     return false
@@ -85,6 +100,7 @@ local function json_key_exists(filepath, key)
   local text = strip_bom(table.concat(lines, "\n"))
   local ok_json, data = pcall(vim.json.decode, text)
   if ok_json and type(data) == "table" then
+    cache.set(cache_key, data)
     return data[key] ~= nil
   end
 
@@ -103,12 +119,41 @@ local function json_key_exists(filepath, key)
   return ok_match_ci and result_ci >= 0
 end
 
--- Key existence checks php
+-- Key existence checks php. Laravel PHP lang files commonly nest keys
+-- ('whatsapp' => ['token' => ...]), so the dotted key is looked up via the
+-- extractor's treesitter-based nested-array traversal instead of a regex for
+-- the literal 'whatsapp.token' => pattern (which never matches real files).
 local function php_key_exists(filepath, key)
   if not key or key == "" then
     return true
   end
 
+  local cache_key = "targets_lang_php:" .. filepath
+  local translations = cache.get(cache_key)
+  if not translations then
+    local ok, parsed = pcall(lang_extractor.parse_php_translations, filepath)
+    if ok and type(parsed) == "table" then
+      translations = cache.set(cache_key, parsed)
+    end
+  end
+
+  if translations then
+    if translations[key] ~= nil then
+      return true
+    end
+
+    -- fallback case-insensitive
+    local lower_key = vim.fn.tolower(key)
+    for k in pairs(translations) do
+      if vim.fn.tolower(k) == lower_key then
+        return true
+      end
+    end
+
+    return false
+  end
+
+  -- Treesitter parse unavailable: fall back to regex matching.
   local ok, lines = pcall(vim.fn.readfile, filepath)
   if not ok or not lines then
     return false

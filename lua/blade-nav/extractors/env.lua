@@ -10,6 +10,20 @@ local M = {}
 
 local watcher = nil
 
+--- Invalidate env-derived caches when .env changes on disk.
+--- Also resets the config extractor's memoized env map, which is built from
+--- these values. Exposed for tests; the fs watcher below calls it.
+function M.on_env_changed()
+  cache.clear("env_keys")
+  cache.clear("env_kv_map")
+  -- Avoid a load-time require cycle (extractors.config requires this module);
+  -- if config was never loaded there is nothing to reset.
+  local config_extractor = package.loaded["blade-nav.extractors.config"]
+  if config_extractor and config_extractor.reset_env_map then
+    config_extractor.reset_env_map()
+  end
+end
+
 local function start_watcher(env_file)
   if watcher then
     return
@@ -25,8 +39,7 @@ local function start_watcher(env_file)
       return
     end
     if fname == env_basename then
-      cache.clear("env_keys")
-      cache.clear("env_kv_map")
+      M.on_env_changed()
     end
   end)
 end
@@ -42,7 +55,10 @@ local function parse_with_treesitter(bufnr)
   end
 
   local tree = parser:parse()[1]
-  local root = tree:root()
+  local root = tree and tree:root()
+  if not root then
+    return {}
+  end
   local acc = {}
 
   for node in root:iter_children() do

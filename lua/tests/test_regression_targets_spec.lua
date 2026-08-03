@@ -158,3 +158,72 @@ describe("regression: extractors.lang finds keys under root lang/ (Laravel 9+ la
     assert.is_true(vim.tbl_contains(keys, "messages.welcome"))
   end)
 end)
+
+describe("regression: extractors.config env_map is invalidated when .env changes", function()
+  local root_dir_stub, tmpdir
+  local env_extractor, config_extractor
+
+  local function write_env(value)
+    vim.fn.writefile({ "APP_NAME=" .. value }, tmpdir .. "/.env")
+    -- env.get_map parses the loaded buffer; drop it so the file is re-read.
+    local bufnr = vim.fn.bufadd(tmpdir .. "/.env")
+    if vim.api.nvim_buf_is_loaded(bufnr) then
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end
+  end
+
+  before_each(function()
+    clear_blade_nav_modules()
+
+    tmpdir = vim.uv.fs_mkdtemp("/tmp/blade-nav-env-test-XXXXXX")
+    assert.is_truthy(tmpdir)
+    vim.fn.mkdir(tmpdir .. "/config", "p")
+    vim.fn.writefile(
+      { "<?php", "return [", "    'name' => env('APP_NAME', 'fallback'),", "];" },
+      tmpdir .. "/config/app.php"
+    )
+    vim.fn.writefile({ "APP_NAME=Before" }, tmpdir .. "/.env")
+
+    local fs = require("blade-nav.utils.fs")
+    local cache = require("blade-nav.utils.cache")
+    cache.clear()
+    root_dir_stub = stub(fs, "get_root_dir").returns(tmpdir)
+
+    env_extractor = require("blade-nav.extractors.env")
+    config_extractor = require("blade-nav.extractors.config")
+  end)
+
+  after_each(function()
+    env_extractor.stop_watcher()
+    config_extractor.stop_watcher()
+    root_dir_stub:revert()
+    vim.fn.delete(tmpdir, "rf")
+  end)
+
+  it("re-evaluates env() references after env.on_env_changed()", function()
+    local first = config_extractor.get_map()
+    assert.equals("Before", first["app.name"].text)
+
+    write_env("After")
+
+    -- Still stale before the invalidation hook runs.
+    assert.equals("Before", config_extractor.get_map()["app.name"].text)
+
+    env_extractor.on_env_changed()
+
+    local second = config_extractor.get_map()
+    assert.equals("After", second["app.name"].text)
+  end)
+end)
+
+describe("regression: @livewire directive reaches the livewire handler", function()
+  it("lists livewire among compatible handlers for target '@livewire'", function()
+    clear_blade_nav_modules()
+    local targets = require("blade-nav.targets")
+    targets.load_handlers("blade-nav.targets", "./lua/blade-nav/targets", { handlers = {} })
+
+    local compatible = targets.get_compatible_handlers({ target = "@livewire", filetype = "blade" })
+
+    assert.is_true(vim.tbl_contains(compatible, "livewire"))
+  end)
+end)

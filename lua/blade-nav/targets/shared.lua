@@ -32,12 +32,30 @@ function M.build_view_paths(raw_name, dirs, ext)
   return paths
 end
 
+--- Deduplicates a list while preserving the original order. User-configured
+--- search dirs can overlap the standard ones, producing duplicate candidates.
+--- @param list string[]
+--- @return string[]
+local function dedupe(list)
+  local seen = {}
+  local out = {}
+  for _, item in ipairs(list) do
+    if not seen[item] then
+      seen[item] = true
+      table.insert(out, item)
+    end
+  end
+  return out
+end
+
 --- Filters candidate paths down to the ones that exist as files.
 --- Falls back to returning all candidates when none exist.
 --- @param fs table utils/fs module
 --- @param candidates string[]
 --- @return string[], boolean final choices, whether any existing file was found
 function M.existing_or_all(fs, candidates)
+  candidates = dedupe(candidates)
+
   local existing = {}
   for _, path in ipairs(candidates) do
     if fs.path_exists(path) and not fs.is_dir(path) then

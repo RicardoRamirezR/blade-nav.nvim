@@ -50,7 +50,13 @@ function M.get_target(context)
   local directive_name, params
   if context.first_arg and not vim.tbl_contains(DIRECTIVE_MULTI_PARAMS, context.target) then
     directive_name = context.target
-    params = { context.first_arg }
+    -- @each provides a table of views (main view + optional "empty" view);
+    -- other directives provide a plain string.
+    if type(context.first_arg) == "table" then
+      params = context.first_arg
+    else
+      params = { context.first_arg }
+    end
   else
     local line = context.line
     log.debug("Processing line for Blade directive: %s, target %s", line, context.target)

@@ -42,6 +42,10 @@ end
 --- @param context BladeNavContext Context created by context.lua
 --- @return BladeNavTargetInfo|nil { type = "view", name = "normalized.view.name", choices = { "path/1", ... } } or nil
 function M.get_target(context)
+  if context.target and not vim.tbl_contains(M.get_capabilities().targets, context.target) then
+    return nil
+  end
+
   local line = context.line
 
   if not line then

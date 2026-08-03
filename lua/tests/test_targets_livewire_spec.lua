@@ -36,4 +36,26 @@ describe("livewire handler", function()
     assert.equals("livewire", target.type)
     strutil.kebab_to_pascal:revert()
   end)
+
+  it("accepts the '@livewire' directive target from textnode", function()
+    local ctx = {
+      line = "@livewire('user.profile')",
+      target = "@livewire",
+      first_arg = "user.profile",
+      filetype = "blade",
+    }
+    stub(strutil, "kebab_to_pascal").returns("UserProfile")
+
+    local target = livewire.get_target(ctx)
+    assert.is_table(target)
+    assert.equals("livewire", target.type)
+    assert.equals("user.profile", target.name)
+    strutil.kebab_to_pascal:revert()
+  end)
+
+  it("declares '@livewire' in capabilities so the handler is not filtered out", function()
+    local caps = livewire.get_capabilities()
+    assert.is_true(vim.tbl_contains(caps.targets, "@livewire"))
+    assert.is_true(vim.tbl_contains(caps.targets, "livewire"))
+  end)
 end)

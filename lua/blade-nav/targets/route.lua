@@ -18,24 +18,36 @@ end
 --- Resolves the controller path based on PSR-4 mappings.
 --- @param controller string The full controller class name (e.g., App\Http\Controllers\UserController).
 --- @param psr4_mappings table The PSR-4 mappings from composer.json.
---- @return string|nil The resolved file path or nil.
+--- @return string|nil The resolved absolute file path or nil.
 local function resolve_controller_path(controller, psr4_mappings)
+  local resolved_path
+
   if not psr4_mappings or vim.tbl_isempty(psr4_mappings) then
     log.debug("(resolve_controller_path): No PSR-4 mappings, using default conversion.")
-    return controller:sub(1, 1):lower() .. controller:sub(2):gsub("\\", "/") .. ".php"
-  end
-
-  for namespace, path in pairs(psr4_mappings) do
-    if controller:sub(1, #namespace) == namespace then
-      local relative_path = controller:sub(#namespace + 1):gsub("\\", "/") .. ".php"
-      local resolved_path = path .. "/" .. relative_path
-      log.debug("(resolve_controller_path): Matched namespace '%s'. Resolved path: %s", namespace, resolved_path)
-      return resolved_path
+    resolved_path = controller:sub(1, 1):lower() .. controller:sub(2):gsub("\\", "/") .. ".php"
+  else
+    for namespace, path in pairs(psr4_mappings) do
+      if controller:sub(1, #namespace) == namespace then
+        local relative_path = controller:sub(#namespace + 1):gsub("\\", "/") .. ".php"
+        resolved_path = path:gsub("/+$", "") .. "/" .. relative_path
+        log.debug("(resolve_controller_path): Matched namespace '%s'. Resolved path: %s", namespace, resolved_path)
+        break
+      end
     end
   end
 
-  log.debug("(resolve_controller_path): Controller '%s' not matched by any PSR-4 mapping.", controller)
-  return nil
+  if not resolved_path then
+    log.debug("(resolve_controller_path): Controller '%s' not matched by any PSR-4 mapping.", controller)
+    return nil
+  end
+
+  -- PSR-4 values are relative to the project root; make the path absolute so
+  -- existence checks and :edit work regardless of Neovim's cwd.
+  if not resolved_path:match("^/") then
+    resolved_path = fs.get_root_dir() .. "/" .. resolved_path
+  end
+
+  return resolved_path
 end
 
 --- Navigates to a specific method within the current buffer using Tree-sitter.
@@ -54,9 +66,11 @@ local function goto_method(method_name)
 
   log.debug("Searching for method '%s'.", method_name)
 
+  -- PHP methods without an explicit visibility modifier are public too, so
+  -- the modifier is optional here and checked in Lua below.
   local query_template = [[
         (method_declaration
-          (visibility_modifier) @vis (#eq? @vis "public")
+          (visibility_modifier)? @vis
           name: (name) @name (#eq? @name "%s")
         ) @method
     ]]
@@ -75,19 +89,26 @@ local function goto_method(method_name)
   end
 
   for _, matches, _ in query:iter_matches(root, 0) do
+    local name_node = nil
+    local is_public = true
     for id, nodes in pairs(matches) do
       local capture_name = query.captures[id]
-      if capture_name == "name" then
-        for _, node in ipairs(nodes) do
-          if node then
-            local start_row, start_col, _, _ = node:range()
-            vim.api.nvim_win_set_cursor(0, { start_row + 1, start_col })
-            vim.cmd("normal! zz")
-            log.info("Navigated to method '%s'.", method_name)
-            return
-          end
+      if capture_name == "vis" then
+        local vis_text = nodes[1] and ts.get_node_text(nodes[1], 0) or nil
+        if vis_text and vis_text ~= "public" then
+          is_public = false
         end
+      elseif capture_name == "name" then
+        name_node = nodes[1]
       end
+    end
+
+    if name_node and is_public then
+      local start_row, start_col, _, _ = name_node:range()
+      vim.api.nvim_win_set_cursor(0, { start_row + 1, start_col })
+      vim.cmd("normal! zz")
+      log.info("Navigated to method '%s'.", method_name)
+      return
     end
   end
 
@@ -167,6 +188,12 @@ function M.resolve(target_info)
     return false
   end
 
+  if controller == "Closure" then
+    -- Closure routes have no controller file; resolve silently.
+    log.debug("Route '%s' is handled by a Closure; no controller to open.", route_name)
+    return false
+  end
+
   log.debug("Found definition for '%s': controller=%s, method=%s", route_name, controller, method)
 
   local psr4_mappings = laravel_utils.get_psr4_mappings()
@@ -185,7 +212,12 @@ function M.resolve(target_info)
   vim.cmd("edit " .. escaped_path)
   log.info("Opened controller file: %s", controller_path)
 
-  goto_method(method)
+  -- Jumping to the method is best-effort (it needs the php TS parser); the
+  -- controller file is already open, so resolution still counts as success.
+  local ok, err = pcall(goto_method, method)
+  if not ok then
+    log.warn("Could not navigate to method '%s': %s", method or "__invoke", tostring(err))
+  end
   return true
 end
 

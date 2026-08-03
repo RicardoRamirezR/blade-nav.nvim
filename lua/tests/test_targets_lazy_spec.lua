@@ -152,4 +152,38 @@ describe("BladeNav targets lazy loading", function()
     assert.is_true(ok)
     assert.is_not_nil(targets._handlers.good)
   end)
+
+  it("produces a deterministic handler order: sorted, with vue before inertia", function()
+    targets.load_handlers("blade-nav.targets", "./lua/blade-nav/targets", { handlers = {} })
+
+    local order = targets._handler_order
+    local pos = {}
+    for i, name in ipairs(order) do
+      pos[name] = i
+    end
+
+    assert.is_not_nil(pos.vue, "vue handler should be registered")
+    assert.is_not_nil(pos.inertia, "inertia handler should be registered")
+    assert.is_true(pos.vue < pos.inertia, "vue handler must be tried before inertia in .vue files")
+
+    -- all non-priority handlers fall back to alphabetical order
+    local rest = {}
+    for _, name in ipairs(order) do
+      if name ~= "vue" then
+        table.insert(rest, name)
+      end
+    end
+    local sorted = vim.deepcopy(rest)
+    table.sort(sorted)
+    assert.are.same(sorted, rest)
+  end)
+
+  it("keeps priority ordering when load_handlers runs twice", function()
+    targets.load_handlers("blade-nav.targets", "./lua/blade-nav/targets", { handlers = {} })
+    local first = vim.deepcopy(targets._handler_order)
+
+    targets.load_handlers("blade-nav.targets", "./lua/blade-nav/targets", { handlers = {} })
+
+    assert.are.same(first, targets._handler_order)
+  end)
 end)

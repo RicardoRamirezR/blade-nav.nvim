@@ -18,6 +18,14 @@ local function get_env_map()
   return env_map
 end
 
+--- Reset cached state derived from .env. Called by the env extractor's fs
+--- watcher when .env changes on disk; also drops the evaluated config map so
+--- env() references are re-read.
+function M.reset_env_map()
+  env_map = nil
+  cache.clear("config_kv_map")
+end
+
 --- Evaluate a PHP value node into a simplified representation.
 --- Supports: string, number, boolean, null, array, env('KEY', default).
 --- @param content string
@@ -114,7 +122,10 @@ local function extract_config_file_map(filepath)
   end
 
   local tree = parser:parse()[1]
-  local root = tree:root()
+  local root = tree and tree:root()
+  if not root then
+    return {}, basename
+  end
   local map = {}
 
   local function walk_array(file_content, arr_node, current_prefix)

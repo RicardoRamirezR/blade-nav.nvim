@@ -76,10 +76,11 @@ local function parse_json_translations(filepath)
   return translations
 end
 
---- Parse PHP translation file
+--- Parse PHP translation file (exported: also used by the lang target handler
+--- to check nested keys like 'whatsapp.token').
 --- @param filepath string
 --- @return table<string, string>
-local function parse_php_translations(filepath)
+function M.parse_php_translations(filepath)
   local translations = {}
 
   local content = fs.read_file(filepath)
@@ -94,7 +95,10 @@ local function parse_php_translations(filepath)
   end
 
   local tree = parser:parse()[1]
-  local root = tree:root()
+  local root = tree and tree:root()
+  if not root then
+    return translations
+  end
 
   local function walk_array(file_content, arr_node, current_prefix)
     for child in arr_node:iter_children() do
@@ -240,7 +244,7 @@ function M.get_map()
       for _, php_file in ipairs(php_files) do
         local basename = php_file:match("([^/]+)%.php$")
         if basename then
-          local php_trans = parse_php_translations(php_file)
+          local php_trans = M.parse_php_translations(php_file)
           for key, value in pairs(php_trans) do
             local full_key = basename .. "." .. key
             if not map[full_key] or locale == default_locale then
@@ -329,7 +333,7 @@ function M.get_map_all_locales()
       for _, php_file in ipairs(php_files) do
         local basename = php_file:match("([^/]+)%.php$")
         if basename then
-          local php_trans = parse_php_translations(php_file)
+          local php_trans = M.parse_php_translations(php_file)
           for k, v in pairs(php_trans) do
             local full_key = basename .. "." .. k
             locale_map[full_key] = v

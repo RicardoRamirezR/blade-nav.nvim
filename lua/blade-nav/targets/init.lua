@@ -12,6 +12,12 @@ M._handler_modules = {}
 M._failed_handlers = {}
 M._handler_capabilities = {}
 
+--- Explicit handler precedence: handlers listed here are tried (when enabled)
+--- before the remaining ones, which fall back to alphabetical order. In .vue
+--- files the `vue` handler (component tags) must win over `inertia`
+--- (project-wide reverse lookup).
+local HANDLER_PRIORITY = { "vue" }
+
 --- Register a target handler after it's required.
 --- @param name string
 --- @param handler table
@@ -161,6 +167,9 @@ local function discover_handlers(handler_dir_path)
     name, ftype = uv.fs_scandir_next(handle)
   end
 
+  -- readdir order is OS-dependent; sort for deterministic handler precedence.
+  table.sort(handler_names)
+
   return handler_names
 end
 
@@ -184,14 +193,33 @@ function M.load_handlers(handler_module_base, handler_dir_path, config)
   end
 
   local discovered = discover_handlers(handler_dir_path)
-  for _, name in ipairs(discovered) do
+
+  local function is_enabled(name)
     if config.handlers and config.handlers[name] == false then
       log.debug("Skipping handler '%s' (disabled in config)", name)
-    else
-      local module_path = handler_module_base .. "." .. name
-      M._handler_modules[name] = module_path
-      table.insert(M._handler_order, name)
+      return false
     end
+    return true
+  end
+
+  local ordered = {}
+  local seen = {}
+  for _, name in ipairs(HANDLER_PRIORITY) do
+    if vim.tbl_contains(discovered, name) and is_enabled(name) then
+      table.insert(ordered, name)
+      seen[name] = true
+    end
+  end
+  for _, name in ipairs(discovered) do
+    if not seen[name] and is_enabled(name) then
+      table.insert(ordered, name)
+    end
+  end
+
+  for _, name in ipairs(ordered) do
+    local module_path = handler_module_base .. "." .. name
+    M._handler_modules[name] = module_path
+    table.insert(M._handler_order, name)
   end
 
   log.info("Registered %d handlers (lazy)", #M._handler_order)

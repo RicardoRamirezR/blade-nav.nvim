@@ -90,4 +90,52 @@ describe("targets.directive.get_target", function()
     local result = directive.get_target({ filetype = "blade", target = "route", first_arg = "x" })
     assert.is_nil(result)
   end)
+
+  it("offers both views for @each when first_arg is a table (main + empty view)", function()
+    -- core/textnode returns first_arg as a table for @each: main view plus
+    -- the optional 4th-parameter "empty" view.
+    local context = {
+      filetype = "blade",
+      target = "@each",
+      first_arg = { "main.view", "empty.view" },
+      line = "@each('main.view', $items, 'item', 'empty.view')",
+    }
+
+    local result = directive.get_target(context)
+
+    assert.is_not_nil(result)
+    assert.equals("directive", result.type)
+    assert.is_true(
+      vim.tbl_contains(result.choices, FAKE_ROOT .. "/resources/views/main/view.blade.php"),
+      "expected main view candidate, got: " .. vim.inspect(result.choices)
+    )
+    assert.is_true(
+      vim.tbl_contains(result.choices, FAKE_ROOT .. "/resources/views/empty/view.blade.php"),
+      "expected empty view candidate, got: " .. vim.inspect(result.choices)
+    )
+  end)
+
+  it("deduplicates choices when user paths overlap the standard views dir", function()
+    config_module.setup({ laravel_components_paths = { "resources/views" } })
+
+    local context = {
+      filetype = "blade",
+      target = "@include",
+      first_arg = "pages.home",
+      line = "@include('pages.home')",
+    }
+
+    local result = directive.get_target(context)
+
+    assert.is_not_nil(result)
+    local counts = {}
+    for _, choice in ipairs(result.choices) do
+      counts[choice] = (counts[choice] or 0) + 1
+    end
+    for choice, count in pairs(counts) do
+      assert.equals(1, count, "duplicate choice: " .. choice)
+    end
+
+    config_module.setup({ laravel_components_paths = {} })
+  end)
 end)
