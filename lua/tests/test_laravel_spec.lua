@@ -2,6 +2,9 @@
 local laravel = require("blade-nav.utils.laravel")
 local cache = require("blade-nav.utils.cache")
 local real_cmd = require("blade-nav.utils.cmd")
+-- Required at file level: some tests below replace package.loaded["blade-nav.utils.fs"]
+-- with a stub, so a later require would not return the real module.
+local fs = require("blade-nav.utils.fs")
 
 describe("laravel.get_route_list", function()
   before_each(function()
@@ -38,7 +41,7 @@ describe("laravel.get_route_list", function()
   end)
 
   it("uses primed cache if available", function()
-    cache.set("route_list:primed", {
+    cache.set("route_list:primed:" .. fs.get_root_dir(), {
       foo = { controller = "X", method = "y" },
     })
     local result = laravel.get_route_list("foo")

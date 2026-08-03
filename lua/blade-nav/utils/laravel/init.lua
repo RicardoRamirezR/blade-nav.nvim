@@ -17,13 +17,15 @@ local VIEW_DIRS = {
 --- Get PSR-4 mappings from composer.json.
 --- @return table<string, string>|nil Map of namespace to path, or nil on error
 function M.get_psr4_mappings()
-  local cache_key = "psr4_mappings"
+  -- Scope the cache key to the project root so switching projects in the
+  -- same session does not serve another project's mappings.
+  local root = fs.get_root_dir()
+  local cache_key = "psr4_mappings:" .. root
   local cached = cache.get(cache_key, math.huge)
   if cached then
     return cached
   end
 
-  local root = fs.get_root_dir()
   local composer_data = fs.read_file(root .. "/composer.json")
   if not composer_data then
     log.warn("composer.json not found or unreadable.")
@@ -103,11 +105,12 @@ function M.get_component_paths(component_identifier, custom_search_paths)
 
   local root = fs.get_root_dir()
 
-  local base_name = component_identifier:match("^([^.]+)") or component_identifier
-  local sub_path = component_identifier:gsub("^" .. vim.pesc(base_name), ""):gsub("^%.", "/")
-  local studly_case_name = base_name:gsub("%-([%w])", string.upper):gsub("^%l", string.upper)
+  -- Pascal-case each dot/kebab segment of the identifier (same as
+  -- targets/livewire.lua's pascal_case_path) so sub-namespaces use
+  -- StudlyCase: "input.date-picker" -> "Input/DatePicker.php".
+  local class_path = M.kebab_to_pascal(component_identifier):gsub("%.", "/")
 
-  local class_file_path = root .. "/app/View/Components/" .. studly_case_name .. sub_path .. ".php"
+  local class_file_path = root .. "/app/View/Components/" .. class_path .. ".php"
   local anon_view_path = root .. "/resources/views/components/" .. component_identifier:gsub("%.", "/") .. ".blade.php"
   local anon_index_path = root
     .. "/resources/views/components/"
@@ -149,22 +152,27 @@ function M.get_component_paths(component_identifier, custom_search_paths)
     for _, path in ipairs(all_standard_paths) do
       table.insert(final_choices, path)
     end
-    local pascal_case_component = base_name:gsub("%-([%w])", string.upper):gsub("^%l", string.upper)
+    -- Artisan accepts slash-separated names for nested components
+    -- (`make:component Input/DatePicker`), creating both the class in
+    -- app/View/Components/Input/ and the anonymous view. class_path is
+    -- already StudlyCased per segment; using only the base name would drop
+    -- the sub-namespace (and even the component name itself).
     table.insert(final_choices, {
-      label = "php artisan make:component " .. pascal_case_component,
-      cmd = { "php", "artisan", "make:component", pascal_case_component },
+      label = "php artisan make:component " .. class_path,
+      cmd = { "php", "artisan", "make:component", class_path },
     })
   end
 
-  if #existing_standard_paths > 0 then
-    for _, custom_base_path in ipairs(custom_search_paths) do
-      local normalized_custom_path = custom_base_path:gsub("/$", "")
-      local custom_base = normalized_custom_path:match("^/") and normalized_custom_path
-        or root .. "/" .. normalized_custom_path
-      local custom_view_path = custom_base .. "/components/" .. component_identifier:gsub("%.", "/") .. ".blade.php"
-      if fs.path_exists(custom_view_path) and not fs.is_dir(custom_view_path) then
-        table.insert(final_choices, custom_view_path)
-      end
+  -- Custom search paths are always consulted (not only when a standard path
+  -- exists): a component living solely in a user-configured path must still
+  -- be offered.
+  for _, custom_base_path in ipairs(custom_search_paths) do
+    local normalized_custom_path = custom_base_path:gsub("/$", "")
+    local custom_base = normalized_custom_path:match("^/") and normalized_custom_path
+      or root .. "/" .. normalized_custom_path
+    local custom_view_path = custom_base .. "/components/" .. component_identifier:gsub("%.", "/") .. ".blade.php"
+    if fs.path_exists(custom_view_path) and not fs.is_dir(custom_view_path) then
+      table.insert(final_choices, custom_view_path)
     end
   end
 
@@ -191,6 +199,10 @@ end
 function M.psr4_app()
   local psr4_mappings = M.get_psr4_mappings()
   for namespace, path in pairs(psr4_mappings) do
+    -- composer.json psr-4 values may be arrays: `"App\\": ["app/"]`.
+    if type(path) == "table" then
+      path = path[1]
+    end
     if path == "app/" or path == "app" then
       return namespace
     end
@@ -213,7 +225,9 @@ end
 --- Get the BladeNav.php filename.
 --- @return string
 function M.get_blade_nav_filename()
-  local script_path = debug.getinfo(1, "S").source:sub(2)
+  local source = debug.getinfo(1, "S").source
+  -- The source usually starts with "@" (file path); guard in case it does not.
+  local script_path = source:sub(1, 1) == "@" and source:sub(2) or source
   local script_dir = vim.fn.fnamemodify(script_path, ":p:h")
   return script_dir .. "/../../../../BladeNav.php"
 end
@@ -225,6 +239,10 @@ function M.kebab_to_pascal(input)
   return require("blade-nav.utils.string").kebab_to_pascal(input)
 end
 
+-- Per-root memo for is_laravel_project: the heuristics hit the filesystem
+-- (including a composer.json read) on every call otherwise.
+local is_laravel_project_cache = {}
+
 --- Detect if current working directory looks like a Laravel project.
 --- Heuristics: artisan, or composer.json with laravel/framework|lumen,
 --- or typical Laravel paths.
@@ -235,31 +253,42 @@ function M.is_laravel_project(cwd)
   if not root_dir or root_dir == "" then
     root_dir = (uv and uv.cwd()) or vim.fn.getcwd() or "."
   end
+
+  local cached = is_laravel_project_cache[root_dir]
+  if cached ~= nil then
+    return cached
+  end
+
   local function P(p)
     return root_dir .. "/" .. p
   end
 
+  local result = false
   if fs.path_exists(P("artisan")) then
-    return true
-  end
-  if fs.path_exists(P("routes/web.php")) then
-    return true
-  end
-  if fs.path_exists(P("resources/views")) then
-    return true
-  end
-  if fs.path_exists(P("composer.json")) then
+    result = true
+  elseif fs.path_exists(P("routes/web.php")) then
+    result = true
+  elseif fs.path_exists(P("resources/views")) then
+    result = true
+  elseif fs.path_exists(P("composer.json")) then
     local contents = fs.read_file(P("composer.json"))
     if contents then
       local ok, data = pcall(vim.json.decode, contents)
       if ok and data and data.require then
         if data.require["laravel/framework"] or data.require["laravel/lumen-framework"] then
-          return true
+          result = true
         end
       end
     end
   end
-  return false
+
+  is_laravel_project_cache[root_dir] = result
+  return result
+end
+
+--- Clear the per-root is_laravel_project memo (test helper).
+function M.__test_clear_is_laravel_cache()
+  is_laravel_project_cache = {}
 end
 
 -- Re-exports from routes

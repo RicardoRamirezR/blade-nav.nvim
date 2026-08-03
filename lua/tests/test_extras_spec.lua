@@ -13,7 +13,7 @@ describe("Extra Laravel utils", function()
   -- (1) Primed cache consistency
   --
   it("returns consistent maps with and without route_name", function()
-    cache.set("route_list:primed", {
+    cache.set("route_list:primed:" .. fs.get_root_dir(), {
       foo = { controller = "App\\Http\\Controllers\\Foo", method = "bar" },
     })
 
@@ -84,5 +84,73 @@ describe("Extra Laravel utils", function()
 
     path_exists:revert()
     is_dir:revert()
+  end)
+
+  it("offers make:component with the full nested name for dotted identifiers", function()
+    local path_exists = stub(fs, "path_exists").returns(false)
+    local is_dir = stub(fs, "is_dir").returns(false)
+
+    local choices = laravel.get_component_paths("input.date-picker")
+    local found = false
+    for _, c in ipairs(choices) do
+      if type(c) == "table" and c.cmd then
+        assert.same({ "php", "artisan", "make:component", "Input/DatePicker" }, c.cmd)
+        found = true
+      end
+    end
+    assert.is_true(found, "make:component must keep the sub-namespace (Input/DatePicker)")
+
+    path_exists:revert()
+    is_dir:revert()
+  end)
+
+  it("pascal-cases each segment of the class component path", function()
+    local path_exists = stub(fs, "path_exists").returns(false)
+    local is_dir = stub(fs, "is_dir").returns(false)
+
+    local choices = laravel.get_component_paths("input.date-picker")
+    local root = fs.get_root_dir()
+    assert.is_true(
+      vim.tbl_contains(choices, root .. "/app/View/Components/Input/DatePicker.php"),
+      "expected StudlyCase class path, got: " .. vim.inspect(choices)
+    )
+
+    path_exists:revert()
+    is_dir:revert()
+  end)
+
+  it("offers components existing only in a custom search path", function()
+    local root = fs.get_root_dir()
+    local custom_view = root .. "/modules/blog/components/badge.blade.php"
+
+    local path_exists = stub(fs, "path_exists").invokes(function(p)
+      return p == custom_view
+    end)
+    local is_dir = stub(fs, "is_dir").returns(false)
+
+    -- No standard path exists; the component lives solely in the custom path.
+    local choices = laravel.get_component_paths("badge", { "modules/blog" })
+    assert.is_true(
+      vim.tbl_contains(choices, custom_view),
+      "expected custom-path component to be offered, got: " .. vim.inspect(choices)
+    )
+
+    path_exists:revert()
+    is_dir:revert()
+  end)
+
+  --
+  -- (6) psr4_app with array psr-4 values
+  --
+  it("handles composer.json psr-4 values given as arrays", function()
+    cache.clear()
+    local read_file = stub(fs, "read_file").returns(vim.json.encode({
+      autoload = { ["psr-4"] = { ["Noah\\"] = { "app/" } } },
+    }))
+
+    assert.equals("Noah\\", laravel.psr4_app())
+
+    read_file:revert()
+    cache.clear()
   end)
 end)
