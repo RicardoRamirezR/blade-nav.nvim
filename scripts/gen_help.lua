@@ -19,8 +19,8 @@ local function rule()
   return string.rep("=", WIDTH)
 end
 
---- Right-align `tag` on the same line as `left`, keeping at least two
---- spaces between them when there's room.
+--- Right-align `tag` on the same line as `left`, keeping at least one
+--- space between them.
 local function tagline(left, tag)
   left = left or ""
   local pad = WIDTH - #left - #tag
@@ -156,7 +156,7 @@ local OPTIONS = {
   {
     key = "inertia_extensions",
     type = "table",
-    default = '{ "vue", "tsx", "jsx", "ts" }',
+    default = '{ "vue", "tsx", "jsx", "ts", "js" }',
     desc = "File extensions tried, in order, when resolving Inertia page components.",
   },
   {

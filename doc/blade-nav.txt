@@ -110,7 +110,7 @@ inertia_pages_path                              *blade-nav.inertia_pages_path*
         Override the Inertia pages directory. `nil` resolves to "Pages".
 
 inertia_extensions                              *blade-nav.inertia_extensions*
-        Type: table    Default: { "vue", "tsx", "jsx", "ts" }
+        Type: table    Default: { "vue", "tsx", "jsx", "ts", "js" }
 
         File extensions tried, in order, when resolving Inertia page
         components.

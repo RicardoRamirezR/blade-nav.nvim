@@ -34,18 +34,9 @@ vim.opt.writebackup = false
 -- Load plenary commands
 vim.cmd("runtime! plugin/plenary.vim")
 
--- Optional: configure nvim-treesitter if available but disable problematic features
-pcall(function()
-  require("nvim-treesitter.configs").setup({
-    ensure_installed = { "blade", "php", "html", "vue" },
-    sync_install = true,
-    highlight = { enable = false },
-    indent = { enable = false },
-    autopairs = { enable = false },
-    autotag = { enable = false },
-  })
-end)
-
--- Debug info (optional, puedes comentar estas líneas después)
--- print("Plenary path:", plenary_dir)
--- print("Plenary exists:", vim.fn.isdirectory(plenary_dir))
+-- Tree-sitter parsers (php, blade, html, vue) must be available on the
+-- runtimepath. CI compiles them ahead of time into site/parser (see
+-- .github/actions/compile-parsers); locally, install them with :TSInstall.
+-- Note: nvim-treesitter's own setup() is intentionally NOT called here: on
+-- its `main` branch the `configs` module no longer exists, and on `master`
+-- ensure_installed would trigger synchronous network installs during tests.

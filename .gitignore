@@ -54,3 +54,4 @@ luac.out
 *.hex
 
 .superpowers/
+docs/

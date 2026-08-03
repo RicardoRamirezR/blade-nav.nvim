@@ -1,6 +1,7 @@
 .PHONY: test debug-test lint docs
 
 # Version with proper exit code handling
+# `-u` loads minimal_init here so :PlenaryBustedDirectory exists; the option forwards the same init to each spawned test instance. Both are required.
 test:
 	@echo "Running tests..."
 	@nvim --headless -u tests/minimal_init.lua \

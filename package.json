@@ -1,0 +1,8 @@
+{
+  "name": "blade-nav.nvim",
+  "private": true,
+  "description": "Laravel-aware navigation, completion, and inline value annotations for Neovim. Only used to pin the tree-sitter-cli version for CI and as the npm cache key.",
+  "devDependencies": {
+    "tree-sitter-cli": "0.24.7"
+  }
+}

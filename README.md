@@ -81,7 +81,7 @@ For `__()` and `trans()` calls, `K` opens a floating window showing the translat
 
 ## Installation
 
-Requires Neovim >= 0.11 and `nvim-treesitter` with `php` and `html` parsers.
+Requires Neovim >= 0.11 and `nvim-treesitter` with `php`, `blade`, `vue`, and `html` parsers.
 
 ### lazy.nvim
 
@@ -144,7 +144,7 @@ require('blade-nav').setup({
 
     -- Inertia
     inertia_pages_path = nil,         -- nil = "Pages" (default)
-    inertia_extensions = { 'vue', 'tsx', 'jsx', 'ts' },
+    inertia_extensions = { 'vue', 'tsx', 'jsx', 'ts', 'js' },
 
     -- Vue
     jsconfig_path = './jsconfig.json',
